@@ -15,6 +15,7 @@
 <p align="center">
   <a href="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml"><img src="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/LB623/no-negative-echo/stargazers"><img src="https://img.shields.io/github/stars/LB623/no-negative-echo?style=flat&amp;logo=github" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/LB623/no-negative-echo" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/Codex-Skill-F97316" alt="Codex Skill">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/docs-English-E11D48" alt="English docs">
@@ -26,6 +27,7 @@
   <a href="#usage">Usage</a> ·
   <a href="#boundary">Decision boundary</a> ·
   <a href="#evaluation">Evaluation</a> ·
+  <a href="#license">License</a> ·
   <a href="#feedback">Feedback</a>
 </p>
 
@@ -175,6 +177,7 @@ The public cases are a development set. Passing them does not mean the problem i
 .
 ├── .github/workflows/test.yml
 ├── BACKGROUND.md
+├── LICENSE
 ├── README.md
 ├── README_EN.md
 ├── evals/
@@ -196,6 +199,12 @@ The public cases are a development set. Passing them does not mean the problem i
 ```
 
 </details>
+
+<a id="license"></a>
+
+## License
+
+This project is released under the [MIT License](LICENSE). Commercial use, modification, distribution, and closed-source redistribution are allowed as long as the original copyright and license notices are preserved.
 
 <a id="feedback"></a>
 

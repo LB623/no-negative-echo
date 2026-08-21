@@ -15,6 +15,7 @@
 <p align="center">
   <a href="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml"><img src="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/LB623/no-negative-echo/stargazers"><img src="https://img.shields.io/github/stars/LB623/no-negative-echo?style=flat&amp;logo=github" alt="GitHub stars"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/LB623/no-negative-echo" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/Codex-Skill-F97316" alt="Codex Skill">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/docs-中文-E11D48" alt="中文文档">
@@ -26,6 +27,7 @@
   <a href="#usage">使用</a> ·
   <a href="#boundary">判断边界</a> ·
   <a href="#evaluation">评测</a> ·
+  <a href="#license">许可证</a> ·
   <a href="#feedback">反馈</a>
 </p>
 
@@ -175,6 +177,7 @@ python3 tests/test_scripts.py
 .
 ├── .github/workflows/test.yml
 ├── BACKGROUND.md
+├── LICENSE
 ├── README.md
 ├── README_EN.md
 ├── evals/
@@ -196,6 +199,12 @@ python3 tests/test_scripts.py
 ```
 
 </details>
+
+<a id="license"></a>
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE)。允许商用、修改、分发和闭源再发布，但必须保留原始版权与许可声明。
 
 <a id="feedback"></a>
 
