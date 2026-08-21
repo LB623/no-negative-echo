@@ -131,16 +131,9 @@ Judge each output surface separately:
 
 The first condition is required. If it holds, keep the information when either the second or third condition also holds. Keep comparisons, audits, verbatim quotations, changelogs, and migration notes when the user explicitly requests them.
 
-```mermaid
-flowchart TD
-    A[Information to review] --> B{Would a reader still need it<br/>without the working session?}
-    B -->|No| F[Omit]
-    B -->|Yes| C{Would omission cause material harm<br/>or does it describe a real baseline change?}
-    C -->|Yes| E[Keep]
-    C -->|No| D{Did the user explicitly request it?}
-    D -->|Yes| E
-    D -->|No| F
-```
+<p align="center">
+  <img src="./no-negative-echo/assets/decision-boundary-en.svg" width="920" alt="Three-step decision for final-deliverable information: whether readers still need it, whether omission causes harm or hides a real baseline change, and whether the user explicitly requested it">
+</p>
 
 The authoritative baseline is the code or committed state at the start of the task, a released product, or a user-approved artifact. Assistant drafts, temporary patches, and unaccepted proposals do not count. If a public API was actually removed, the commit and release notes should say so. If an option existed only in the conversation, it should not suddenly appear in Git history.
 
@@ -189,6 +182,8 @@ The public cases are a development set. Passing them does not mean the problem i
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   ├── assets/
+│   │   ├── decision-boundary-en.svg
+│   │   ├── decision-boundary-zh.svg
 │   │   ├── icon-400.png
 │   │   └── icon.png
 │   └── scripts/check_surface.py

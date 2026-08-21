@@ -131,16 +131,9 @@ $no-negative-echo
 
 第一项是前提。在此基础上，第二项或第三项至少满足一项，这条信息才保留。用户明确要求的方案比较、审计、逐字引用、发布记录或迁移说明也应保留。
 
-```mermaid
-flowchart TD
-    A[待判断的信息] --> B{脱离工作会话后<br/>读者仍然需要吗}
-    B -->|否| F[省略]
-    B -->|是| C{省略会造成实质问题<br/>或它属于真实基线变化吗}
-    C -->|是| E[保留]
-    C -->|否| D{用户明确要求说明吗}
-    D -->|是| E
-    D -->|否| F
-```
+<p align="center">
+  <img src="./no-negative-echo/assets/decision-boundary-zh.svg" width="920" alt="最终交付信息的三步判断：读者是否仍需要；省略是否会造成实质问题或隐藏真实基线变化；用户是否明确要求说明">
+</p>
 
 这里的权威基线，指任务开始时的代码或已提交状态、已发布产品，以及用户确认过的产物。助手草稿、临时补丁和未采用方案都不算。真实删除公开 API 时，commit 和发布说明应该写清楚；某个方案只在聊天里出现过，Git 历史里就不该突然提到它。
 
@@ -189,6 +182,8 @@ python3 tests/test_scripts.py
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   ├── assets/
+│   │   ├── decision-boundary-en.svg
+│   │   ├── decision-boundary-zh.svg
 │   │   ├── icon-400.png
 │   │   └── icon.png
 │   └── scripts/check_surface.py
