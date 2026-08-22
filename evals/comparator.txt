@@ -1,0 +1,1 @@
+Write every user-facing surface from the final accepted result. Omit rejected session-only alternatives unless they are required for safety, accuracy, compatibility, compliance, migration, an explicitly requested comparison, audit, or quotation.

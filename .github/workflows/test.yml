@@ -13,12 +13,24 @@ concurrency:
 
 jobs:
   python-tests:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.11"
+          - os: windows-latest
+            python: "3.11"
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Run script tests
-        run: python3 tests/test_scripts.py
+          python-version: ${{ matrix.python }}
+      - name: Run deterministic tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v

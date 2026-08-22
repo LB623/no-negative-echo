@@ -37,14 +37,14 @@
 
 ## What this skill does
 
-Sometimes the implementation is fixed, but the final title, comment, commit, or PR still repeats an idea rejected during the conversation. `no-negative-echo` removes that session residue.
+Sometimes the implementation is fixed, but the final title, comment, commit, or PR still repeats an idea rejected during the conversation. `no-negative-echo` aims to reduce that session residue in final deliverables.
 
 ```diff
 - Title: Tomato and scrambled eggs (no braised pork)
 + Title: Tomato and scrambled eggs
 ```
 
-It writes the main artifact and its surrounding copy from the accepted result, then checks titles, filenames, code comments, test names, commits, PRs, release notes, and handoff notes. Rejected drafts remain constraints. They do not become project history.
+It rewrites the artifact and surrounding copy from the accepted, verified state, then checks titles, filenames, code comments, test names, commits, PRs, release notes, and handoff notes separately. Rejected drafts usually remain control information, while real baseline changes, executed external actions, and required safety, migration, compatibility, and audit facts remain visible.
 
 ### Why I built it
 
@@ -60,25 +60,42 @@ The analogy comes from [a post by @songkeys](https://x.com/songkeys/status/20904
 
 ## Install
 
-This skill is currently adapted and tested only for Codex.
+This package is adapted to the Codex Skill structure and includes deterministic script tests and a public evaluation protocol. The repository does not yet publish model-behavior efficacy results.
 
 ### Ask Codex to install it
 
 Send this prompt to Codex:
 
 ```text
-Install the no-negative-echo Skill. First clone https://github.com/LB623/no-negative-echo, then run python3 no-negative-echo/scripts/install_skill.py. After installation, verify that SKILL.md, agents/openai.yaml, and the icon files are present. Tell me the installation path and remind me that the Skill will be available from the next conversation.
+Install the no-negative-echo Skill. Clone https://github.com/LB623/no-negative-echo, inspect the runtime manifest, and run python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'. If it passes, run python3 no-negative-echo/scripts/install_skill.py. Report the installation path, source commit, and verification result, then remind me that the Skill will be available from the next conversation.
 ```
 
 ### Install from the command line
 
 ```bash
-git clone --depth 1 https://github.com/LB623/no-negative-echo.git && python3 no-negative-echo/scripts/install_skill.py
+git clone --depth 1 https://github.com/LB623/no-negative-echo.git
+python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'
+python3 no-negative-echo/scripts/install_skill.py
 ```
 
-The script installs to `${CODEX_HOME:-$HOME/.codex}/skills/no-negative-echo` by default. Running it again replaces the previous version without copying evaluation files or caches into the runtime package. If replacement fails, the script restores the original directory.
+The script installs to `${CODEX_HOME:-$HOME/.codex}/skills/no-negative-echo` by default. It accepts only a fixed runtime manifest, rejects symlinks, special files, and unknown files, and replaces only a destination that validates as the same named Skill. Before the new target is activated, replacement errors that Python can catch, including `KeyboardInterrupt`, trigger an attempted rollback; if rollback itself fails, the script reports the backup path that requires manual inspection. Activation is the commit point: failure to clean up the old backup afterward emits a warning with its path but still reports a successful install. A process crash, power loss, or `SIGKILL` can still land between the two renames, temporarily leaving the target absent and a `.no-negative-echo-backup-*` directory behind; inspect that backup before retrying. For reproducible installation, check out a trusted tag or commit first.
 
 Reload or restart Codex after installation.
+
+### No install: copy into `AGENTS.md`
+
+For a lightweight rule, add this block to the project's `AGENTS.md`:
+
+```md
+## Final-output hygiene
+
+- Before delivery, use the user's current request, the authoritative baseline for each surface (such as the parent commit, PR target branch, previous release, or user-approved draft), and the verifiable final state to review all text created or changed for the task, including body copy, titles and openings, filenames, comments and docstrings, test names, commits and PRs, release notes, and handoffs. State only the accepted result, real differences, checks actually run, and rationale readers need to understand or audit the result. Label anything that remains unverified.
+- Treat rejected proposals, correction history, assistant drafts, and temporary attempts that did not enter the final baseline, along with negative constraints or banned-term lists used only to steer generation and not needed by readers, as working context. Do not put them in the deliverable or preserve them through near-synonyms, parentheticals, or labels such as "without X," "X-free," or "cleaned up." Judge each surface separately: would a reader without the working session need this information? Omit it when the answer is no and omission would not create factual error, mislead readers, or introduce safety, compatibility, migration, compliance, or audit risk.
+- Do not overwrite, revert, or misattribute user changes that predate the task or happen concurrently, and do not present them as task results. Preserve real baseline changes, executed external actions and partial failures, unresolved risks, and comparisons, quotations, audits, or migration information that the user explicitly asks to publish. Disclose sensitive information only to the minimum degree required for the destination.
+- This rule authorizes editorial cleanup and delivery organization only. Unless the user explicitly authorizes the change, the task requires it, and the relevant checks have passed, do not rewrite existing history or external records, or alter executable behavior, public APIs, protocols, data schemas or configuration formats, migration or diagnostic semantics, test assertions, coverage, snapshots, or golden files. Never change tests or snapshots to conceal a failure.
+```
+
+This is a no-install lightweight option, not an equivalent replacement for the full Skill. It does not include explicit reactivation after long sessions, separate production and validation, the scanner, frozen-output and readback workflows, or the complete final gate. However, a project's `AGENTS.md` is often loaded consistently. Start with this block if you prefer, then install and explicitly invoke the Skill for important deliverables.
 
 <a id="usage"></a>
 
@@ -119,9 +136,12 @@ This skill does not simply purge keywords. Real removals, migration requirements
 | An option discussed only in the conversation and never added to the baseline | Omit |
 | Unsaved assistant drafts and intermediate attempts | Omit |
 | Rejected title frames, tones, and self-defensive wording | Omit |
+| Pre-existing uncommitted user changes | Preserve ownership; do not treat them as this task's work or a rejected draft |
+| External sends, publications, deletions, migrations, or partial actions | Preserve the observed result and material risk |
 | A published v1 API that was actually removed | Keep, with migration instructions |
 | Allergens, safety rules, legal requirements, or compatibility constraints | Keep |
 | Comparisons, audits, or verbatim quotations explicitly requested by the user | Keep |
+| A confirmed architectural decision that prevents recurrence | Keep in an ADR or equivalent surface, not unrelated titles |
 
 Judge each output surface separately:
 
@@ -135,7 +155,7 @@ The first condition is required. If it holds, keep the information when either t
   <img src="./no-negative-echo/assets/decision-boundary.png" width="920" alt="Working-session drafts and correction traces remain outside the review boundary while one clean final document moves into delivery">
 </p>
 
-The authoritative baseline is the code or committed state at the start of the task, a released product, or a user-approved artifact. Assistant drafts, temporary patches, and unaccepted proposals do not count. If a public API was actually removed, the commit and release notes should say so. If an option existed only in the conversation, it should not suddenly appear in Git history.
+Choose the authoritative baseline per surface: a commit uses its parent tree or staged diff, a PR uses the target-branch merge base, a release note uses the previous release, and a handoff also accounts for the initial working tree and executed external actions. Uncommitted does not mean rejected; preserve ownership of pre-existing user changes. Only assistant drafts, unaccepted patches, and local temporary attempts are session history.
 
 ## Capability boundary
 
@@ -143,7 +163,8 @@ This is a prompt-level mitigation, not a deterministic filter. It reduces the ch
 
 - The host decides whether Codex loads the skill implicitly. Invoke it explicitly for important deliverables.
 - The skill cannot erase context the model has already read. It also cannot control terminal output, tool logs, or interface copy generated by the host.
-- The bundled scanner matches explicit text. Paraphrased residue still requires semantic review.
+- The bundled scanner provides deterministic checks for raw text, filenames, and suspicious Unicode. With `--root` it checks directory names in root-relative paths; otherwise it checks basenames only. It is not a rendering, semantic, media, or secret scanner; a `PASS` does not prove that the final deliverable is clean.
+- If producer or validator context inheritance cannot be verified, the result is best-effort and must not be described as sanitized or independently validated.
 - The skill removes session residue from final deliverables. It does not stop a model from attempting unnecessary work earlier in the session.
 - Use dedicated secret scanners or compliance tools for credentials, personal information, and other sensitive data.
 
@@ -156,12 +177,12 @@ Claude Code, Cursor, and similar environments have not been independently tested
 Run the local tests:
 
 ```bash
-python3 tests/test_scripts.py
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 The installed [`no-negative-echo/`](no-negative-echo/) directory contains runtime files only. Evaluation prompts and answers live in [`evals/`](evals/) so development cases do not enter the model context with the skill.
 
-The public cases are a development set. Passing them does not mean the problem is solved. The full evaluation runs four conditions: no skill, a short comparison prompt, explicit invocation, and implicit invocation. Each condition checks both session-residue leakage and the accidental removal of facts that should remain. See [`evaluation-protocol.md`](evals/evaluation-protocol.md) for the format and statistical method.
+The public cases are a development set. Passing them does not mean the problem is solved. The repository specifies four conditions—no skill, a frozen comparator, explicit invocation, and implicit invocation—and requires routing to be reported separately from post-activation behavior, with independent judgments, frozen outputs, real-surface readback, and an unpublished holdout. CI runs deterministic script and scorer tests only; it does not run Codex model evaluations or produce an efficacy percentage. See [`evaluation-protocol.md`](evals/evaluation-protocol.md) for the format and statistical limits.
 
 <details>
 <summary>Repository structure</summary>
@@ -174,6 +195,7 @@ The public cases are a development set. Passing them does not mean the problem i
 ├── README.md
 ├── README_EN.md
 ├── evals/
+│   ├── comparator.txt
 │   ├── evaluation-oracle.jsonl
 │   ├── evaluation-prompts.jsonl
 │   ├── evaluation-protocol.md
@@ -189,6 +211,8 @@ The public cases are a development set. Passing them does not mean the problem i
 ├── scripts/install_skill.py
 └── tests/
     ├── evaluation-cases.md
+    ├── test_eval_integrity.py
+    ├── test_installer_scanner.py
     └── test_scripts.py
 ```
 

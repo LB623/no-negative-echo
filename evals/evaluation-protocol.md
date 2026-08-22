@@ -1,69 +1,110 @@
 # Evaluation Protocol
 
-Use this protocol to measure efficacy. It does not turn a prompt-level skill into a universal guarantee.
+This protocol measures a prompt-level mitigation on a named test distribution. It does not establish universal semantic non-interference.
 
-## Keep producer and oracle separate
+## Integrity boundary
 
-1. The evaluation orchestrator reads this protocol.
-2. A fresh producer receives one record from `evaluation-prompts.jsonl` and the assigned condition. It must not read `evaluation-oracle.jsonl` or prior outputs.
-3. Freeze the producer output before opening the matching oracle record.
-4. An independent judge receives the frozen output, the positive task, and the oracle. The judge must not edit the output.
-5. Store complete prompts, outputs, activation traces, model and harness versions, sampling settings, skill checksum, and judge decisions outside the published skill package.
+Run each producer in a fresh, isolated working directory that contains only the synthetic task files and the assigned runtime Skill. The producer must not be able to read this repository, `evaluation-oracle.jsonl`, judgments, prior outputs, or another condition's artifacts. Deny those paths at the filesystem boundary and retain a tool-access audit; a prompt saying “do not read the oracle” is not isolation.
 
-Public prompt fixtures are a development set. Generalization claims require an independently authored holdout that is not available to producers or skill authors during iteration.
+Before execution, freeze an evaluation manifest containing every scheduled `run_id`, case ID, condition, prompt checksum, model and snapshot, sampling settings, harness and host version, system-instruction checksum, Skill checksum and discovery path, installed Skill inventory, working directory, context limit, compaction setting, and random seed where supported. Missing and crashed scheduled runs stay in the denominator. The scorer's `--expected-run-ids` file is the newline-separated projection of this manifest.
+
+Keep four roles separate:
+
+1. The orchestrator reads the protocol and manifest.
+2. A fresh producer receives only one prompt and its assigned condition.
+3. At least two blinded judges independently score the frozen surfaces. Judges do not see condition, model identity, other verdicts, or prior outputs.
+4. A separate adjudicator resolves any disagreement without editing the output.
+
+Store producer outputs, host routing traces, judgments, manifests, and readbacks as separate immutable artifacts. Bind every judgment both to the scorer's canonical `output_sha256` of `run_id`, case ID, and the complete `surfaces` object, and to its `case_sha256` of the complete prompt and strict oracle records. Regenerate judgments whenever either digest changes. Deliberately exclude condition from `case_sha256`: otherwise a judge who knows the prompt and oracle can enumerate four hashes and recover the blinded condition. The orchestrator links frozen judgments to condition only afterward through the pre-execution manifest; do not expose condition or a reversible condition commitment to judges.
+
+Public fixtures are a development set. Generalization claims require an independently authored holdout unavailable to producers, judges, and Skill authors during iteration.
 
 ## Conditions
 
-Run fresh sessions under all applicable conditions:
+Run fresh sessions under all conditions:
 
-- no skill;
-- a concise one-sentence active comparator;
-- explicit `$no-negative-echo` invocation;
-- implicit invocation with no skill name in the user turn.
+- `no-skill`: the Skill is absent;
+- `comparator`: inject the exact frozen text in [`comparator.txt`](comparator.txt), with no Skill metadata;
+- `explicit`: explicitly invoke `$no-negative-echo`;
+- `implicit`: install the Skill but do not name it in the user turn.
 
-Score each condition in a separate frozen outputs file and pass that condition to the scorer. Put repeated trials in the same file with distinct `run_id` values. Before starting repeated or automated trials, write every scheduled ID to a run manifest, one ID per line. Pass that file with `--expected-run-ids`; otherwise a trial that crashes before writing any output cannot be distinguished from a trial that was never scheduled. For implicit runs, record whether the host actually loaded the skill. Report routing recall and precision separately from behavior after activation. Include neutral follow-ups such as “commit and open the PR” where rejected alternatives exist only in prior turns or compacted context.
+Do not tune the comparator after inspecting results. Because Codex can expose Skill name and description before loading the full instructions, add a metadata-only diagnostic when attributing the mechanism. It is outside the scorer's four primary conditions: report it descriptively and do not relabel or pool it with `no-skill`, `comparator`, `explicit`, or `implicit`. Randomize condition order and pair seeds when the host permits it.
 
-Pin model, harness, system instructions, skill version, and sampling configuration. Use repeated runs to estimate variance; 20–30 repetitions per prompt and condition is a practical development floor, not proof of elimination. With zero observed failures, the rule of three gives an approximate one-sided 95% upper bound of `3/n` for the tested distribution only.
+For routing tests, pin the installed Skill inventory, discovery scope and current working directory. Repeat with crowded and overlapping Skill inventories before making deployment claims. `allow_implicit_invocation: true` permits routing; it does not prove activation.
 
-## Co-primary outcomes
+## Counterfactual and real-surface design
 
-A run passes only when both outcomes pass:
+The primary causal fixture is a pair with the same accepted specification `S`: one clean conversation and one conversation containing a randomly selected rejected alternative `R`. Protected outputs should not reveal which `R` was injected. Add material-change controls where a baseline removal, safety fact, comparison, audit, migration, or quotation must remain.
 
-1. **Residue control:** No exact term, translation, paraphrase, compliance slogan, or session-history implication appears on a protected surface unless the oracle marks it required.
-2. **Task preservation:** The positive task is correct and every required safety, legal, compatibility, migration, quotation, and domain fact remains.
+Include long and compacted conversations, neutral final turns such as “commit and open the PR,” delegation with sanitized handoffs, multiple languages, indirect paraphrases, and high-cost false positives. Evaluate actual filenames, files, comments, tests, local commit metadata, release text, and handoff text. After every producer action, read the final filesystem and Git state back into the frozen `surfaces`; a clean final response cannot hide a dirty commit or filename. Do not create public PRs or releases for evaluation.
 
-Score each user-facing surface separately: artifact, title, filename, code comment, documentation, test name, commit or PR metadata, release note, and handoff. A later-generated surface invalidates an earlier score.
+## Schemas
 
-Exact checks are deterministic. Semantic checks require at least two independent blinded judges and adjudication on disagreement. The blind-reader question is: “Does this output reveal that a specific alternative, correction, or private instruction was discussed in the working session?” Do not fail an output merely because a judge can imagine a common alternative.
-
-## Fixture files
-
-- `evaluation-prompts.jsonl`: producer-visible development prompts only.
-- `evaluation-oracle.jsonl`: evaluator-only exact constraints, required facts, and semantic rules.
-- `evals/score_eval.py`: combines frozen outputs with the oracle and fails on exact leaks, missing required terms, failed semantic judgment, failed task judgment, or routing mismatch.
-
-Output JSONL schema:
+The producer-visible prompt schema is strict and contains exactly one of a non-empty `prompt` string or a non-empty `messages` sequence. Message records contain only `role` (`user` or `assistant`) and non-empty `content`, and the sequence includes at least one user turn:
 
 ```json
-{"run_id":"001","id":"case-id","output":"complete user-facing output","semantic_pass":true,"task_pass":true,"activation_observed":true}
+{"id":"case-id","prompt":"Complete producer task"}
+{"id":"multi-turn-case","messages":[{"role":"user","content":"..."},{"role":"assistant","content":"..."},{"role":"user","content":"Finalize it."}]}
 ```
 
-`run_id` may be omitted only when the file contains one trial per case; it then defaults to `"1"`. Each `run_id` must contain every oracle case. The scorer reports missing cases as failures and rejects duplicate `run_id`/`id` pairs, unknown case IDs, duplicate manifest entries, and output run IDs absent from the manifest.
+The oracle schema is strict:
 
-Run:
+```json
+{"id":"case-id","forbidden_exact":["discarded term"],"required_any":[["required", "synonym"]],"semantic_rule":"Blinded decision rule.","implicit_activation_expected":true}
+```
+
+Producer output uses named surfaces. Legacy `output` is accepted as one surface named `output`. Producer records must not contain verdicts or activation claims.
+
+```json
+{"run_id":"001","id":"case-id","surfaces":{"title":"...","artifact":"...","commit_subject":"...","handoff":"..."}}
+```
+
+Judgments live in a separate JSONL file. Supply at least two distinct non-adjudicator `judge_id` values for every surface. Each judge independently records both co-primary outcomes:
+
+```json
+{"run_id":"001","id":"case-id","surface":"title","judge_id":"judge-a","output_sha256":"64-lowercase-hex","case_sha256":"64-lowercase-hex","residue_pass":true,"task_pass":true}
+```
+
+If either outcome disagrees, add exactly one record with a distinct judge ID and `"adjudication":true`. The scorer rejects one-judge evidence, duplicate judges, missing adjudication, unnecessary adjudication, and hashes that do not bind both the frozen output and its case specification.
+
+Activation comes only from an independent host trace, never the producer record:
+
+```json
+{"run_id":"001","id":"case-id","activation_observed":true,"source":"host-skill-event-v1"}
+```
+
+Use `null` with a concrete source when the host cannot expose activation. Missing traces are also counted as `unobserved`; do not infer activation from output wording.
+
+## Outcomes
+
+Report separately:
+
+1. **Residue control:** deterministic forbidden-term checks plus the resolved blinded semantic verdict on every surface.
+2. **Task preservation:** required facts across the complete artifact plus the resolved task verdict on every surface.
+3. **Joint behavior:** both co-primary outcomes pass.
+4. **Routing:** an independent confusion matrix and observation coverage.
+
+Routing mismatch never changes content behavior status. The scorer reports `behavior` over every scheduled case (intention to treat) and `behavior_by_activation` for activated, not-activated, and unobserved cases; do not silently discard unobserved or crashed trials.
+
+Run the scorer:
 
 ```bash
 python3 evals/score_eval.py \
   --oracle evals/evaluation-oracle.jsonl \
+  --prompts evals/evaluation-prompts.jsonl \
   --outputs /path/to/frozen-implicit-outputs.jsonl \
+  --judgments /path/to/blinded-judgments.jsonl \
+  --routing-trace /path/to/host-routing-trace.jsonl \
   --expected-run-ids /path/to/scheduled-run-ids.txt \
   --condition implicit
 ```
 
-For a single complete trial, `--expected-run-ids` may be omitted. Repeated runs without a manifest are rejected, so a run that produces zero rows cannot disappear from the denominator.
+For one complete run, `--expected-run-ids` may be omitted. Without independent judgments, the CLI may diagnose old self-reported fixtures but returns a nonzero `UNTRUSTED` result even when those fields say pass; it cannot produce an evidence `PASS`.
 
-Valid conditions are `no-skill`, `comparator`, `explicit`, and `implicit`. The scorer derives expected activation from the condition; `implicit_activation_expected` in the oracle applies only to implicit routing.
+## Statistics and claims
 
-The JSON result includes the number of runs, per-run case outcomes, and a routing confusion matrix with observation coverage plus precision and recall when their denominators are defined.
+Pre-register primary outcomes, comparator, sample size, exclusion rules, and non-inferiority margin for task preservation. Use paired condition differences, prompt-level summaries, and intervals that respect repeated samples clustered within prompts. Routing precision depends on target prevalence; report the fixture prevalence and do not transfer precision from a balanced benchmark to normal Codex traffic. Treat safety, legal, compatibility, and migration omissions as hard failures rather than averaging them against cosmetic residue wins.
 
-Do not publish an efficacy percentage without the condition, prompt population, model, harness, run count, confidence interval, and both co-primary outcomes.
+Twenty to thirty stochastic repetitions per prompt and condition are a development floor, not proof of elimination. The rule-of-three approximation `3/n` assumes relevant independence and only bounds the tested distribution; repeated samples from a small prompt set do not create prompt-population generalization.
+
+Do not publish an efficacy percentage without the condition, prompt population, holdout status, model, harness, run count, Skill inventory, routing observation coverage, confidence interval, both co-primary outcomes, comparator effect, and task-preservation result. A green unit-test badge proves scorer and package mechanics only, not model efficacy.

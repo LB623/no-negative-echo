@@ -37,14 +37,14 @@
 
 ## 这是什么
 
-方案已经改对，Agent 最后却把聊天里淘汰过的内容写进了标题、注释、commit 或 PR。`no-negative-echo` 专门清理这类会话残留。
+方案已经改对，Agent 最后却把聊天里淘汰过的内容写进了标题、注释、commit 或 PR。`no-negative-echo` 用于降低这类会话残留进入最终交付的概率。
 
 ```diff
 - 标题：番茄炒蛋（没有东坡肉）
 + 标题：番茄炒蛋
 ```
 
-它只用最终采用的结果来写正文和外层文案，并检查标题、文件名、代码注释、测试名、commit、PR、发布说明和交付说明。聊天里被否掉的草案只作为约束，不会带进项目历史。
+它要求从最终采用且已经验证的状态重写正文和外层文案，并分别检查标题、文件名、代码注释、测试名、commit、PR、发布说明和交付说明。聊天里被否掉的草案通常只作为控制信息；真实基线变化、已执行的外部操作和必要的安全、迁移、兼容及审计事实仍须保留。
 
 ### 为什么做这个 Skill
 
@@ -60,25 +60,42 @@
 
 ## 安装
 
-目前只适配并验证了 Codex。
+目前按 Codex Skill 结构适配，并提供确定性脚本测试和公开评测协议；仓库尚未发布模型行为有效性结果。
 
 ### 让 Codex 直接安装
 
 把下面这段发给 Codex：
 
 ```text
-请安装 no-negative-echo Skill。先克隆 https://github.com/LB623/no-negative-echo，再运行 python3 no-negative-echo/scripts/install_skill.py。安装后检查 SKILL.md、agents/openai.yaml 和图标文件是否完整，告诉我安装路径，并提醒我下一轮对话开始使用。
+请安装 no-negative-echo Skill。克隆 https://github.com/LB623/no-negative-echo 后，先检查运行文件清单并运行 python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'，通过后再运行 python3 no-negative-echo/scripts/install_skill.py。告诉我安装路径、安装来源提交和验证结果，并提醒我下一轮对话开始使用。
 ```
 
 ### 命令行安装
 
 ```bash
-git clone --depth 1 https://github.com/LB623/no-negative-echo.git && python3 no-negative-echo/scripts/install_skill.py
+git clone --depth 1 https://github.com/LB623/no-negative-echo.git
+python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'
+python3 no-negative-echo/scripts/install_skill.py
 ```
 
-脚本默认安装到 `${CODEX_HOME:-$HOME/.codex}/skills/no-negative-echo`。再次运行会替换旧版本，不会把旧目录里的评测文件和缓存带进运行包。替换失败时，脚本会恢复原目录。
+脚本默认安装到 `${CODEX_HOME:-$HOME/.codex}/skills/no-negative-echo`。它只接受固定运行文件清单，拒绝符号链接、特殊文件和未知文件；再次运行只会替换能验证为同名 Skill 的目录。新目标激活前，Python 能捕获的替换异常（包括 `KeyboardInterrupt`）会尝试恢复旧目录；恢复失败则报告需要人工检查的备份路径。新目标激活后就视为安装成功；清理旧备份失败只会警告并报告路径，不会把已激活的新版误报为未安装。进程崩溃、断电或 `SIGKILL` 仍可能在两次重命名之间留下 `.no-negative-echo-backup-*` 并使目标暂时缺失；重试前应先检查该备份。需要可复现安装时，请先 checkout 你信任的 tag 或 commit。
 
 安装完成后，重新加载或重启 Codex。
+
+### 不安装：复制到 `AGENTS.md`
+
+只想先用一条轻量规则，可以把下面这段加到项目的 `AGENTS.md`：
+
+```md
+## 最终交付清理
+
+- 交付前，按用户当前要求、每个输出位置的权威基线（如父提交、PR 目标分支、上一发布版本或用户批准稿）和可复核的最终状态，检查本任务新建或修改的正文、标题与开篇、文件名、注释/docstring、测试名、commit/PR、发布说明和交付说明。只陈述最终采用的结果、真实差异、实际执行的验证，以及读者理解或审计结果所需的理由；未验证项必须明确标注。
+- 未进入最终基线的被否方案、纠错经过、助手草稿和临时尝试，以及仅用于控制生成过程、无需对读者公开的负向指令或禁用词表，只作为工作信息，不写入成品；也不得用近义改写、括号、“无 X”“非 X 版”或“已清理”等标签保留。每个位置单独判断：不了解本轮会话的读者是否需要该信息？若不需要，且省略不会造成事实错误、误导、安全、兼容、迁移、合规或审计风险，则省略。
+- 不得覆盖、回退或误归因任务开始前及并发发生的用户改动，也不得把它们算作本次成果。按需如实保留真实基线变化、已执行的外部操作及部分失败、未解决风险，以及用户明确要求对外说明的比较、引用、审计或迁移信息；敏感信息按目的地最小披露。
+- 此规则只授权清理表述和交付组织。除非用户明确授权、任务本身要求并已完成相应验证，不得改写既有历史或外部记录，不得改变可执行行为、公共 API、协议、数据结构或配置格式、迁移与诊断语义、测试断言、覆盖范围、快照或 Golden 文件，也不得通过修改测试或快照掩盖失败。
+```
+
+这是无需安装的轻量版，但不等价于完整 Skill：它没有长会话重新激活、分离生成与验证、扫描器、冻结与回读流程和完整验收闸门。不过 `AGENTS.md` 通常会被项目稳定加载；可以先用这一段，重要交付再安装并显式调用 Skill。
 
 <a id="usage"></a>
 
@@ -119,9 +136,12 @@ $no-negative-echo
 | 只在聊天里讨论过、从未进入基线的方案 | 省略 |
 | 未保存的助手草稿和中间尝试 | 省略 |
 | 用户纠正过的标题框架、语气和自证句 | 省略 |
+| 任务开始前已有的用户未提交改动 | 保留其归属，不算作本次成果或被否草稿 |
+| 已经发送、发布、删除、迁移或部分执行的外部操作 | 按实际结果和风险保留 |
 | 已发布的 v1 API 确实被删除 | 保留，并写清迁移方式 |
 | 过敏原、安全规则、法律或兼容性要求 | 保留 |
 | 用户明确要求的方案比较、审计和逐字引用 | 保留 |
+| 已确认且能防止重复踩坑的架构决策 | 放入 ADR 等合适位置，不扩散到无关标题 |
 
 每个输出位置都要单独判断：
 
@@ -135,7 +155,7 @@ $no-negative-echo
   <img src="./no-negative-echo/assets/decision-boundary.png" width="920" alt="工作会话中的草稿和修改痕迹留在筛选边界之外，只有一份干净的最终文档进入交付">
 </p>
 
-这里的权威基线，指任务开始时的代码或已提交状态、已发布产品，以及用户确认过的产物。助手草稿、临时补丁和未采用方案都不算。真实删除公开 API 时，commit 和发布说明应该写清楚；某个方案只在聊天里出现过，Git 历史里就不该突然提到它。
+权威基线要按输出位置选择：commit 看父 tree 或 staged diff，PR 看目标分支 merge-base，发布说明看上一个已发布版本，交付说明还要考虑任务开始时的完整工作区和实际执行过的外部操作。未提交不等于被否；用户原有改动必须单独保留归属。助手草稿、未采用补丁和纯本地临时尝试才属于会话历史。
 
 ## 能力边界
 
@@ -143,7 +163,8 @@ $no-negative-echo
 
 - Codex 是否隐式加载 Skill 由宿主决定，做重要交付时最好显式调用。
 - Skill 无法擦除模型已经读到的上下文，也控制不了终端输出、工具日志和宿主生成的界面文案。
-- 自带扫描器只能匹配明确写出的文本，换种说法的残留仍然要靠语义判断。
+- 自带扫描器只提供原始文本、文件名和可疑 Unicode 的确定性检查；传入 `--root` 时会检查相对路径中的目录名，否则只检查 basename。它不是渲染、语义、媒体或秘密扫描器，`PASS` 不能单独证明最终交付干净。
+- producer 或 validator 的上下文继承模式无法确认时，只能称为 best-effort，不能声称上下文已隔离或经过独立验证。
 - 它处理最终交付里的会话残留，不负责阻止模型一开始做多余的实现。
 - 凭据、个人信息和其他敏感数据仍应使用专门的密钥扫描或合规工具检查。
 
@@ -156,12 +177,12 @@ Claude Code、Cursor 等环境还没有做过独立的安装和行为测试，�
 运行本地测试：
 
 ```bash
-python3 tests/test_scripts.py
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 安装目录 [`no-negative-echo/`](no-negative-echo/) 只放运行时文件。评测提示和答案放在 [`evals/`](evals/) 里，避免开发用例跟着 Skill 一起进入模型上下文。
 
-公开用例只用于开发，跑通不等于问题消失。完整评测会分别运行无 Skill、简短对照提示、显式调用和隐式调用，每组都检查会话残留有没有泄漏，以及该保留的事实有没有被误删。格式和统计方法见 [`evaluation-protocol.md`](evals/evaluation-protocol.md)。
+公开用例只用于开发，跑通不等于问题消失。仓库提供无 Skill、固定对照提示、显式调用和隐式调用的评测协议，要求把 routing 与激活后的行为分开报告，并使用独立裁判、冻结输出、真实 surface 回读和未公开 holdout。CI 只运行确定性脚本与评分器测试，不运行 Codex 模型评测，也不产生有效性百分比。格式和统计限制见 [`evaluation-protocol.md`](evals/evaluation-protocol.md)。
 
 <details>
 <summary>仓库结构</summary>
@@ -174,6 +195,7 @@ python3 tests/test_scripts.py
 ├── README.md
 ├── README_EN.md
 ├── evals/
+│   ├── comparator.txt
 │   ├── evaluation-oracle.jsonl
 │   ├── evaluation-prompts.jsonl
 │   ├── evaluation-protocol.md
@@ -189,6 +211,8 @@ python3 tests/test_scripts.py
 ├── scripts/install_skill.py
 └── tests/
     ├── evaluation-cases.md
+    ├── test_eval_integrity.py
+    ├── test_installer_scanner.py
     └── test_scripts.py
 ```
 

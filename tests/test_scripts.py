@@ -14,8 +14,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "no-negative-echo" / "scripts"))
 sys.path.insert(0, str(REPOSITORY_ROOT / "evals"))
 
-from check_surface import count_matches, normalize
-from score_eval import (
+from check_surface import count_matches, normalize  # noqa: E402
+from score_eval import (  # noqa: E402
     expected_activation,
     load_jsonl,
     load_outputs,
@@ -99,8 +99,7 @@ class EvaluationScoringTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "outputs.jsonl"
             path.write_text(
-                '{"run_id":"001","id":"case-a"}\n'
-                '{"run_id":"002","id":"case-a"}\n',
+                '{"run_id":"001","id":"case-a"}\n' '{"run_id":"002","id":"case-a"}\n',
                 encoding="utf-8",
             )
             self.assertEqual(
@@ -253,6 +252,9 @@ class InstallerTests(unittest.TestCase):
             stale_reference = old_target / "references" / "evaluation-oracle.jsonl"
             stale_reference.parent.mkdir(parents=True)
             stale_reference.write_text("stale\n", encoding="utf-8")
+            (old_target / "SKILL.md").write_text(
+                "---\nname: no-negative-echo\n---\n", encoding="utf-8"
+            )
 
             result = subprocess.run(
                 [
@@ -279,9 +281,7 @@ class InstallerTests(unittest.TestCase):
 class FixtureContractTests(unittest.TestCase):
     def test_interface_icon_assets_are_valid(self) -> None:
         skill_root = REPOSITORY_ROOT / "no-negative-echo"
-        metadata = (skill_root / "agents" / "openai.yaml").read_text(
-            encoding="utf-8"
-        )
+        metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
         for filename, expected_dimensions in {
             "icon.png": (1024, 1024),
