@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "package_id": "io.github.lb623.no-negative-echo",
+  "source_repository": "https://github.com/LB623/no-negative-echo",
+  "files": {
+    "SKILL.md": "bc49531e87fb0ed5820b000e2f8c5b99fef8f09a302cffed17015805ff065d9a",
+    "agents/openai.yaml": "52252e049b122733259dc17f17d54359b4e6445eed1482c393e7744a6f8e9a4c",
+    "assets/decision-boundary.png": "3c80021dc245b4a3fe02a18434fc200fae0db3810c8fd451acc25bfb2e831d7a",
+    "assets/icon-400.png": "9ba3b39b106a1f6b6a376a4ccf91373e8f80923d87ca244892c35c7f95a1a121",
+    "assets/icon.png": "052b7bf0101ab53cbfe2a909155d36df7554acbfbefeefbe94f00e5cf2e74b74",
+    "scripts/check_surface.py": "d63a03fb1052706e1e5d1b23d413251dff5690e0c3e837c069826de6fe06661b"
+  }
+}

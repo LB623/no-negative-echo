@@ -4,7 +4,7 @@
 
 <h1 align="center">No Negative Echo</h1>
 
-<p align="center"><strong>Final-output hygiene for Codex</strong></p>
+<p align="center"><strong>Final-output hygiene for Agent Skills</strong></p>
 
 <p align="center"><em>Ship the result, not the conversation.</em></p>
 
@@ -16,7 +16,7 @@
   <a href="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml"><img src="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/LB623/no-negative-echo/stargazers"><img src="https://img.shields.io/github/stars/LB623/no-negative-echo?style=flat&amp;logo=github" alt="GitHub stars"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/LB623/no-negative-echo" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Codex-Skill-F97316" alt="Codex Skill">
+  <img src="https://img.shields.io/badge/Agent%20Skills-open%20format-F97316" alt="Open Agent Skills format">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/docs-English-E11D48" alt="English docs">
 </p>
@@ -46,6 +46,8 @@ Sometimes the implementation is fixed, but the final title, comment, commit, or 
 
 It rewrites the artifact and surrounding copy from the accepted, verified state, then checks titles, filenames, code comments, test names, commits, PRs, release notes, and handoff notes separately. Rejected drafts usually remain control information, while real baseline changes, executed external actions, and required safety, migration, compatibility, and audit facts remain visible.
 
+The runtime package uses the common subset of the [open Agent Skills format](https://agentskills.io/specification). Hosts that support the format can discover it natively; other agents that can read repository files can load it through a manual prompt. Here, "compatible" refers only to package structure and an available installation path. It does not mean behavioral efficacy has been validated on every host.
+
 ### Why I built it
 
 I have rewritten too many commit messages by hand. The same mistake kept showing up, so I gave it a name: No Negative Echo.
@@ -60,31 +62,64 @@ The analogy comes from [a post by @songkeys](https://x.com/songkeys/status/20904
 
 ## Install
 
-This package is adapted to the Codex Skill structure and includes deterministic script tests and a public evaluation protocol. The repository does not yet publish model-behavior efficacy results.
+This package follows the Agent Skills `SKILL.md` plus optional scripts/resources structure. The open specification defines the package format, not discovery directories, invocation syntax, or tool permissions; the product scopes and paths below come from each host's official documentation. This repository does not yet publish cross-host model-behavior efficacy results.
 
-### Ask Codex to install it
+### Give an agent one installation URL
 
-Send this prompt to Codex:
+Send this prompt to an agent with network, terminal, and filesystem access:
 
 ```text
-Install the no-negative-echo Skill. Clone https://github.com/LB623/no-negative-echo, inspect the runtime manifest, and run python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'. If it passes, run python3 no-negative-echo/scripts/install_skill.py. Report the installation path, source commit, and verification result, then remind me that the Skill will be available from the next conversation.
+Please install the no-negative-echo Skill from:
+https://raw.githubusercontent.com/LB623/no-negative-echo/main/INSTALL.md
+When finished, tell me the installation result and whether a new session or restart is required. If you cannot verify it, do not claim success.
 ```
+
+[`INSTALL.md`](INSTALL.md) is an agent-readable installation contract. It requires host detection, a temporary clone with a recorded commit, tests before installation, destination readback, and an explicit answer about whether a new session is required. It does not assume that every agent natively supports skills.
 
 ### Install from the command line
 
 ```bash
-git clone --depth 1 https://github.com/LB623/no-negative-echo.git
-python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'
-python3 no-negative-echo/scripts/install_skill.py
+git clone https://github.com/LB623/no-negative-echo.git
+python3 -I -m unittest discover -s no-negative-echo/tests -p 'test_*.py'
+python3 -I no-negative-echo/scripts/install_skill.py \
+  --expected-provenance-sha256 9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47 \
+  --discovery-root "$HOME/.agents/skills" \
+  --agent codex
 ```
 
-The script installs to `${CODEX_HOME:-$HOME/.codex}/skills/no-negative-echo` by default. It accepts only a fixed runtime manifest, rejects symlinks, special files, and unknown files, and replaces only a destination that validates as the same named Skill. Before the new target is activated, replacement errors that Python can catch, including `KeyboardInterrupt`, trigger an attempted rollback; if rollback itself fails, the script reports the backup path that requires manual inspection. Activation is the commit point: failure to clean up the old backup afterward emits a warning with its path but still reports a successful install. A process crash, power loss, or `SIGKILL` can still land between the two renames, temporarily leaving the target absent and a `.no-negative-echo-backup-*` directory behind; inspect that backup before retrying. For reproducible installation, check out a trusted tag or commit first.
+This example installs to the current Codex path. For another host, replace the preset using the matrix below. Use `--agent shared` only when the user explicitly requests one installation shared by multiple hosts.
 
-Reload or restart Codex after installation.
+Installation matrix (official documentation checked 2026-08-22. "Native package" means the vendor explicitly supports `SKILL.md`; it does not mean this repository has completed behavioral evaluation on that host):
 
-### No install: copy into `AGENTS.md`
+| Host / product scope | Native package | Official user-level root | Installer preset | Shares `~/.agents/skills` |
+|---|---|---|---|---|
+| [ChatGPT desktop app / Codex CLI / IDE extension](https://developers.openai.com/codex/skills) | Yes | `~/.agents/skills` | `--agent codex` or `--agent shared` | Yes |
+| [Claude Code](https://code.claude.com/docs/en/slash-commands) | Yes | `~/.claude/skills` | `--agent claude` | Not listed by its docs |
+| [Cursor Agent / CLI](https://cursor.com/docs/skills) | Yes | `~/.cursor/skills` or `~/.agents/skills` | `--agent cursor` or `--agent shared` | Yes |
+| [Gemini CLI](https://geminicli.com/docs/cli/tutorials/skills-getting-started/) | Yes | `~/.gemini/skills` or `~/.agents/skills` | `--agent gemini` or `--agent shared` | Yes |
+| [GitHub Copilot CLI](https://docs.github.com/en/copilot/reference/customization-cheat-sheet) | Yes | `~/.copilot/skills` or `~/.agents/skills` | `--agent copilot` or `--agent shared` | Yes |
 
-For a lightweight rule, add this block to the project's `AGENTS.md`:
+`--agent codex` and `--agent shared` both use `~/.agents/skills`; Cursor, Gemini CLI, and GitHub Copilot also document that shared user-level path. With no destination option, the installer prefers the current Codex path and reuses an existing old installation only when it detects one. Use `--agent codex-legacy` to select `${CODEX_HOME:-$HOME/.codex}/skills` explicitly. That legacy compatibility path is not the user-level path recommended by current OpenAI documentation. `--agent` and the advanced `--skills-dir /absolute/or/project/path` are mutually exclusive; a custom destination must be absolute and requires at least one `--discovery-root`. Before installation, pass every verified user/workspace discovery root for the current host as a separate `--discovery-root /absolute/path`, so the installer can repeat concurrent-collision checks while holding its coordination lock. A custom directory proves only that files were copied there; verify host discovery separately. For project scope, point `--skills-dir` at `.agents/skills` for Codex/Cursor/Gemini/Copilot or `.claude/skills` for Claude Code. GitHub Copilot also supports `.github/skills`. Copilot cloud agent and code review need a project Skill in the repository; they cannot rely on a local home directory.
+
+The presets in the table apply only to the listed surfaces with a persistent local home; they do not assert user-level installation support for Codex cloud or other web, remote, or ephemeral surfaces. Such a surface may use `--skills-dir` only when official documentation names its exact project root and the user authorizes modifying the current repository. Otherwise, report the surface as unsupported rather than claiming that a copy in a temporary home is a persistent installation.
+
+The script creates `no-negative-echo` under the selected root. It accepts only a fixed runtime manifest, rejects symlinks, special files, and unknown files, and uses file hashes in a provenance marker so a user-modified same-name directory is not mistaken for an owned installation. Only regular `.DS_Store` files and regular `.pyc`/`.pyo` files directly inside `__pycache__` are treated as disposable cache; any other added content makes installation stop in place. An unmarked historical official version is migrated only when every path and digest exactly matches a known commit; customized, partial, and otherwise unrecognized directories are preserved in place and rejected. Staging and validated previous-version recovery directories live at same-filesystem sibling paths outside the Skill discovery root. After an upgrade, the old version is preserved and its exact path is reported instead of being recursively deleted; this prevents duplicate discovery and path-swap deletion. After the new target is renamed into place, the installer revalidates its manifest, provenance, and directory identity. If that cannot be proven, it explicitly reports activation as uncertain with the target/recovery paths instead of reporting ordinary success. Before activation, replacement errors that Python can catch, including `KeyboardInterrupt`, trigger an attempted rollback; if rollback itself fails, the script reports the recovery path that requires manual inspection. A process crash, power loss, or `SIGKILL` can still land between the two renames and temporarily leave the target absent; inspect the reported recovery path before retrying. Provenance is an integrity and ownership boundary for this installation, not a code signature. For reproducible installation, check out a trusted tag or commit first.
+
+A marked destination must also match an official marker SHA-256 embedded in the installer; a self-authored marker with an internally consistent structure and file hashes does not grant overwrite ownership. The Claude preset checks conflicts only in Claude Code's own discovery root. Because Cursor can also read `.claude/skills`, people who use Cursor as well must ensure that only one discoverable copy exists across `.agents/skills`, `.cursor/skills`, `.claude/skills`, and legacy `.codex/skills`.
+
+For official historical text released before `.gitattributes`, the installer canonicalizes Windows checkout CRLF endings to LF before comparison. Binary files still match byte for byte, and no other content changes are tolerated.
+
+Reload or restart as required by the host, then confirm that `no-negative-echo` appears in its skill list. A directory proves file installation; list visibility proves discovery. Neither alone proves activation in the current turn or behavioral efficacy. Unless the host can confirm both a current-session rescan and current-session activation, report that a new session is required or recommended; list visibility alone cannot justify "not required."
+
+### Manual fallback without native skill discovery
+
+If the agent can read the cloned files but does not support Agent Skills, or discovery cannot be confirmed, send this at the start of each task:
+
+```text
+Before starting the task, read ./no-negative-echo/SKILL.md in full, resolve its relative paths against ./no-negative-echo, and follow its workflow for this turn. In the handoff, state which files you actually read and which checks you actually ran. If you cannot read the files or run the scripts, label the result best-effort and do not claim that the host activated the Skill.
+```
+
+For a persistent lightweight rule, add this block to a project instruction file the host reliably loads, such as `AGENTS.md` on hosts that support it:
 
 ```md
 ## Final-output hygiene
@@ -95,23 +130,23 @@ For a lightweight rule, add this block to the project's `AGENTS.md`:
 - This rule authorizes editorial cleanup and delivery organization only. Unless the user explicitly authorizes the change, the task requires it, and the relevant checks have passed, do not rewrite existing history or external records, or alter executable behavior, public APIs, protocols, data schemas or configuration formats, migration or diagnostic semantics, test assertions, coverage, snapshots, or golden files. Never change tests or snapshots to conceal a failure.
 ```
 
-This is a no-install lightweight option, not an equivalent replacement for the full Skill. It does not include explicit reactivation after long sessions, separate production and validation, the scanner, frozen-output and readback workflows, or the complete final gate. However, a project's `AGENTS.md` is often loaded consistently. Start with this block if you prefer, then install and explicitly invoke the Skill for important deliverables.
+These fallbacks do not depend on native discovery, but they are not equivalent to the full Skill. Instruction filenames, scope, and load timing still depend on the host. The lightweight rule also omits explicit reactivation after long sessions, separate production and validation, the scanner, frozen-output and readback workflows, and the complete final gate.
 
 <a id="usage"></a>
 
 ## Usage
 
-Codex may load the skill implicitly. After a long conversation, invoke it explicitly before generating a commit, PR, release title, or handoff note:
+Hosts that support implicit matching may select the Skill from its `description`, but discovery is not activation. After a long conversation, explicitly name it before generating a commit, PR, release title, or handoff note. The documented syntax is `$no-negative-echo` in Codex and `/no-negative-echo` in Claude Code. On other hosts, select the Skill through that host's current native mechanism, or name it directly in the prompt and verify actual activation; do not infer activation from output wording alone.
 
 ```text
-$no-negative-echo
+Use the no-negative-echo Skill.
 Write the commit subject, PR title, PR body, and handoff note from the final diff.
 ```
 
 For an article:
 
 ```text
-$no-negative-echo
+Use the no-negative-echo Skill.
 Rewrite the title and opening from the retained final text.
 ```
 
@@ -161,14 +196,14 @@ Choose the authoritative baseline per surface: a commit uses its parent tree or 
 
 This is a prompt-level mitigation, not a deterministic filter. It reduces the chance that session residue enters the final artifact, but it cannot guarantee a clean result every time.
 
-- The host decides whether Codex loads the skill implicitly. Invoke it explicitly for important deliverables.
+- The host and current surface/version decide whether the Skill is discovered, implicitly selected, or explicitly activated, and which tools it can use. Explicitly name it for important deliveries and retain observable evidence.
 - The skill cannot erase context the model has already read. It also cannot control terminal output, tool logs, or interface copy generated by the host.
 - The bundled scanner provides deterministic checks for raw text, filenames, and suspicious Unicode. With `--root` it checks directory names in root-relative paths; otherwise it checks basenames only. It is not a rendering, semantic, media, or secret scanner; a `PASS` does not prove that the final deliverable is clean.
 - If producer or validator context inheritance cannot be verified, the result is best-effort and must not be described as sanitized or independently validated.
 - The skill removes session residue from final deliverables. It does not stop a model from attempting unnecessary work earlier in the session.
 - Use dedicated secret scanners or compliance tools for credentials, personal information, and other sensitive data.
 
-Claude Code, Cursor, and similar environments have not been independently tested. This repository does not claim support for them.
+The installation matrix establishes only vendor-documented package-format and discovery-path compatibility. It does not show that this Skill routes correctly or behaves effectively on a host. For agents without native Agent Skills, manual loading is a best-effort fallback and must not be labeled native activation. `agents/openai.yaml` is optional UI metadata for OpenAI surfaces, not a prerequisite for common Agent Skills behavior.
 
 <a id="evaluation"></a>
 
@@ -177,20 +212,22 @@ Claude Code, Cursor, and similar environments have not been independently tested
 Run the local tests:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -I -m unittest discover -s tests -p 'test_*.py'
 ```
 
 The installed [`no-negative-echo/`](no-negative-echo/) directory contains runtime files only. Evaluation prompts and answers live in [`evals/`](evals/) so development cases do not enter the model context with the skill.
 
-The public cases are a development set. Passing them does not mean the problem is solved. The repository specifies four conditions—no skill, a frozen comparator, explicit invocation, and implicit invocation—and requires routing to be reported separately from post-activation behavior, with independent judgments, frozen outputs, real-surface readback, and an unpublished holdout. CI runs deterministic script and scorer tests only; it does not run Codex model evaluations or produce an efficacy percentage. See [`evaluation-protocol.md`](evals/evaluation-protocol.md) for the format and statistical limits.
+The public cases are a development set. Passing them does not mean the problem is solved. The repository specifies four conditions—no skill, a frozen comparator, explicit invocation, and implicit invocation—and requires routing to be reported separately from post-activation behavior, with independent judgments, frozen outputs, real-surface readback, and an unpublished holdout. One complete evaluation declares one reference host in advance and holds that host and version fixed across all four conditions; it does not need to test every agent. Other hosts are optional, independent replications and are not pooled with the primary evaluation. The scorer validates one condition at a time and treats `--reference-host` as a declared label; the orchestrator and frozen-manifest audit must enforce consistency across all four conditions. CI runs deterministic script and scorer tests only; it does not run agent-model evaluations or produce an efficacy percentage. See [`evaluation-protocol.md`](evals/evaluation-protocol.md) for the format and statistical limits.
 
 <details>
 <summary>Repository structure</summary>
 
 ```text
 .
+├── .gitattributes
 ├── .github/workflows/test.yml
 ├── BACKGROUND.md
+├── INSTALL.md
 ├── LICENSE
 ├── README.md
 ├── README_EN.md
@@ -201,6 +238,7 @@ The public cases are a development set. Passing them does not mean the problem i
 │   ├── evaluation-protocol.md
 │   └── score_eval.py
 ├── no-negative-echo/
+│   ├── .no-negative-echo-provenance.json
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   ├── assets/

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import unittest
+import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+import unittest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -245,22 +247,35 @@ class EvaluationScoringTests(unittest.TestCase):
 
 
 class InstallerTests(unittest.TestCase):
-    def test_installer_replaces_stale_runtime_files(self) -> None:
+    def test_installer_replaces_a_valid_existing_runtime(self) -> None:
         with TemporaryDirectory() as temp_dir:
             skills_dir = Path(temp_dir) / "skills"
             old_target = skills_dir / "no-negative-echo"
-            stale_reference = old_target / "references" / "evaluation-oracle.jsonl"
-            stale_reference.parent.mkdir(parents=True)
-            stale_reference.write_text("stale\n", encoding="utf-8")
-            (old_target / "SKILL.md").write_text(
-                "---\nname: no-negative-echo\n---\n", encoding="utf-8"
+            shutil.copytree(REPOSITORY_ROOT / "no-negative-echo", old_target)
+            ignored_cache = old_target / "scripts" / "__pycache__" / "stale.pyc"
+            ignored_cache.parent.mkdir(exist_ok=True)
+            ignored_cache.write_bytes(b"stale")
+            coordination_lock = Path(temp_dir) / "coordination.lock"
+            runner = (
+                "from pathlib import Path\n"
+                "import sys\n"
+                f"sys.path.insert(0, {str(REPOSITORY_ROOT / 'scripts')!r})\n"
+                "import install_skill\n"
+                "lock = Path(sys.argv[1])\n"
+                "skills = Path(sys.argv[2])\n"
+                "install_skill._cli_lock_path = lambda: lock\n"
+                "sys.argv = ['install_skill.py', '--skills-dir', str(skills), "
+                "'--discovery-root', str(skills)]\n"
+                "raise SystemExit(install_skill.main())\n"
             )
 
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(REPOSITORY_ROOT / "scripts" / "install_skill.py"),
-                    "--skills-dir",
+                    "-I",
+                    "-c",
+                    runner,
+                    str(coordination_lock),
                     str(skills_dir),
                 ],
                 capture_output=True,
@@ -268,7 +283,11 @@ class InstallerTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertFalse(stale_reference.exists())
+            self.assertTrue(coordination_lock.is_file())
+            self.assertFalse(ignored_cache.exists())
+            self.assertTrue(
+                (old_target / ".no-negative-echo-provenance.json").is_file()
+            )
             self.assertTrue((old_target / "SKILL.md").is_file())
             self.assertTrue((old_target / "agents" / "openai.yaml").is_file())
             self.assertTrue((old_target / "assets" / "icon.png").is_file())
@@ -279,6 +298,57 @@ class InstallerTests(unittest.TestCase):
 
 
 class FixtureContractTests(unittest.TestCase):
+    def test_runtime_hash_inputs_are_forced_to_lf_by_git(self) -> None:
+        paths = [
+            "no-negative-echo/.no-negative-echo-provenance.json",
+            "no-negative-echo/SKILL.md",
+            "no-negative-echo/agents/openai.yaml",
+            "no-negative-echo/scripts/check_surface.py",
+            "scripts/install_skill.py",
+            "INSTALL.md",
+        ]
+        result = subprocess.run(
+            ["git", "check-attr", "eol", "--", *paths],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.skipTest("Git attributes are unavailable outside a checkout")
+
+        observed = {
+            line.split(": ", 2)[0]: line.split(": ", 2)[2]
+            for line in result.stdout.splitlines()
+        }
+        self.assertEqual(observed, {path: "lf" for path in paths})
+
+        unsafe_attributes = subprocess.check_output(
+            [
+                "git",
+                "check-attr",
+                "filter",
+                "ident",
+                "working-tree-encoding",
+                "--",
+                *paths,
+            ],
+            cwd=REPOSITORY_ROOT,
+            text=True,
+        ).splitlines()
+        self.assertTrue(unsafe_attributes)
+        self.assertTrue(all(line.endswith(": unset") for line in unsafe_attributes))
+
+    def test_published_provenance_digest_matches_install_docs(self) -> None:
+        marker = (
+            REPOSITORY_ROOT / "no-negative-echo" / ".no-negative-echo-provenance.json"
+        )
+        digest = hashlib.sha256(marker.read_bytes()).hexdigest()
+        for relative in ("INSTALL.md", "README.md", "README_EN.md"):
+            with self.subTest(relative=relative):
+                contents = (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+                self.assertIn(digest, contents)
+
     def test_interface_icon_assets_are_valid(self) -> None:
         skill_root = REPOSITORY_ROOT / "no-negative-echo"
         metadata = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")

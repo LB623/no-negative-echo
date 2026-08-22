@@ -1,0 +1,2 @@
+* text=auto eol=lf -filter -ident -working-tree-encoding
+*.png binary

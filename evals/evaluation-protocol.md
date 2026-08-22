@@ -2,11 +2,21 @@
 
 This protocol measures a prompt-level mitigation on a named test distribution. It does not establish universal semantic non-interference.
 
+Before scheduling runs, declare exactly one `reference_host` as a product,
+surface, and version/build (for example, `codex-cli@1.2.3`). Run all four
+primary conditions on that same host. One reference host is sufficient for a
+host-scoped evaluation; this protocol does not require testing every agent that
+can install or read the package. Package-format compatibility, successful file
+installation, and skill-list discovery are not evidence of behavioral efficacy.
+The primary four-condition design requires a reference host that supports
+native Skill discovery plus explicit and implicit invocation; evaluate a
+manual-loading fallback separately.
+
 ## Integrity boundary
 
 Run each producer in a fresh, isolated working directory that contains only the synthetic task files and the assigned runtime Skill. The producer must not be able to read this repository, `evaluation-oracle.jsonl`, judgments, prior outputs, or another condition's artifacts. Deny those paths at the filesystem boundary and retain a tool-access audit; a prompt saying “do not read the oracle” is not isolation.
 
-Before execution, freeze an evaluation manifest containing every scheduled `run_id`, case ID, condition, prompt checksum, model and snapshot, sampling settings, harness and host version, system-instruction checksum, Skill checksum and discovery path, installed Skill inventory, working directory, context limit, compaction setting, and random seed where supported. Missing and crashed scheduled runs stay in the denominator. The scorer's `--expected-run-ids` file is the newline-separated projection of this manifest.
+Before execution, freeze an evaluation manifest containing the declared `reference_host`, every scheduled `run_id`, case ID, condition, prompt checksum, model and snapshot, sampling settings, harness and host version, system-instruction checksum, Skill checksum and discovery path, installed Skill inventory, working directory, context limit, compaction setting, and random seed where supported. Missing and crashed scheduled runs stay in the denominator. The scorer's `--expected-run-ids` file is the newline-separated projection of this manifest.
 
 Keep four roles separate:
 
@@ -21,16 +31,23 @@ Public fixtures are a development set. Generalization claims require an independ
 
 ## Conditions
 
-Run fresh sessions under all conditions:
+Run fresh sessions under all conditions on the declared reference host:
 
 - `no-skill`: the Skill is absent;
 - `comparator`: inject the exact frozen text in [`comparator.txt`](comparator.txt), with no Skill metadata;
-- `explicit`: explicitly invoke `$no-negative-echo`;
+- `explicit`: explicitly invoke `no-negative-echo` using the reference host's documented syntax, and freeze that exact invocation in the manifest;
 - `implicit`: install the Skill but do not name it in the user turn.
 
-Do not tune the comparator after inspecting results. Because Codex can expose Skill name and description before loading the full instructions, add a metadata-only diagnostic when attributing the mechanism. It is outside the scorer's four primary conditions: report it descriptively and do not relabel or pool it with `no-skill`, `comparator`, `explicit`, or `implicit`. Randomize condition order and pair seeds when the host permits it.
+Do not tune the comparator after inspecting results. Because a host can expose Skill name and description before loading the full instructions, add a metadata-only diagnostic when attributing the mechanism. It is outside the scorer's four primary conditions: report it descriptively and do not relabel or pool it with `no-skill`, `comparator`, `explicit`, or `implicit`. Randomize condition order and pair seeds when the host permits it.
 
-For routing tests, pin the installed Skill inventory, discovery scope and current working directory. Repeat with crowded and overlapping Skill inventories before making deployment claims. `allow_implicit_invocation: true` permits routing; it does not prove activation.
+For routing tests, pin the installed Skill inventory, discovery scope and current working directory. Repeat with crowded and overlapping Skill inventories before making deployment claims. A host-specific setting that permits implicit invocation, such as `allow_implicit_invocation: true`, permits routing; it does not prove activation.
+
+Cross-host reproduction is optional. Each additional host is a separate
+replication with its own preregistered `reference_host`, manifest, four
+conditions, routing trace, and result. Do not pool it with the primary result
+unless a multi-host estimand and pooling method were preregistered. A manual
+instruction fallback is also a distinct experimental condition, not a native
+Skill replication.
 
 ## Counterfactual and real-surface design
 
@@ -89,22 +106,31 @@ Routing mismatch never changes content behavior status. The scorer reports `beha
 Run the scorer:
 
 ```bash
-python3 evals/score_eval.py \
+python3 -I evals/score_eval.py \
   --oracle evals/evaluation-oracle.jsonl \
   --prompts evals/evaluation-prompts.jsonl \
   --outputs /path/to/frozen-implicit-outputs.jsonl \
   --judgments /path/to/blinded-judgments.jsonl \
   --routing-trace /path/to/host-routing-trace.jsonl \
   --expected-run-ids /path/to/scheduled-run-ids.txt \
+  --reference-host codex-cli@1.2.3 \
   --condition implicit
 ```
+
+The scorer validates one condition per invocation. Its
+`--reference-host` value is a declared label: the scorer records it but does
+not authenticate the running host, read the frozen evaluation manifest, or
+enforce that four separate invocations used the same host and version. The
+orchestrator and retained audit artifacts must enforce those protocol-level
+constraints. Therefore, a single-condition `PASS` is not by itself a complete
+four-condition evaluation result.
 
 For one complete run, `--expected-run-ids` may be omitted. Without independent judgments, the CLI may diagnose old self-reported fixtures but returns a nonzero `UNTRUSTED` result even when those fields say pass; it cannot produce an evidence `PASS`.
 
 ## Statistics and claims
 
-Pre-register primary outcomes, comparator, sample size, exclusion rules, and non-inferiority margin for task preservation. Use paired condition differences, prompt-level summaries, and intervals that respect repeated samples clustered within prompts. Routing precision depends on target prevalence; report the fixture prevalence and do not transfer precision from a balanced benchmark to normal Codex traffic. Treat safety, legal, compatibility, and migration omissions as hard failures rather than averaging them against cosmetic residue wins.
+Pre-register the reference host, primary outcomes, comparator, sample size, exclusion rules, and non-inferiority margin for task preservation. Use paired condition differences, prompt-level summaries, and intervals that respect repeated samples clustered within prompts. Routing precision depends on target prevalence; report the fixture prevalence and do not transfer precision from a balanced benchmark to normal traffic on the reference host. Treat safety, legal, compatibility, and migration omissions as hard failures rather than averaging them against cosmetic residue wins.
 
 Twenty to thirty stochastic repetitions per prompt and condition are a development floor, not proof of elimination. The rule-of-three approximation `3/n` assumes relevant independence and only bounds the tested distribution; repeated samples from a small prompt set do not create prompt-population generalization.
 
-Do not publish an efficacy percentage without the condition, prompt population, holdout status, model, harness, run count, Skill inventory, routing observation coverage, confidence interval, both co-primary outcomes, comparator effect, and task-preservation result. A green unit-test badge proves scorer and package mechanics only, not model efficacy.
+Do not publish an efficacy percentage without the reference host and surface/version, condition, prompt population, holdout status, model, harness, run count, Skill inventory and discovery path, exact explicit-invocation form, routing observation coverage, confidence interval, both co-primary outcomes, comparator effect, and task-preservation result. A green unit-test badge proves scorer and package mechanics only, not model efficacy on that host or any other host.

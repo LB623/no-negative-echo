@@ -128,6 +128,8 @@ class ScorerHarness:
             str(self.outputs),
             "--condition",
             "implicit",
+            "--reference-host",
+            "test-agent 1.0",
         ]
         if judgments is not None:
             write_jsonl(self.judgments, judgments)
@@ -257,6 +259,9 @@ class EvaluationIntegrityTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
             self.assertEqual(payload["status"], "PASS")
+            self.assertEqual(payload["scope"], "single-condition")
+            self.assertEqual(payload["reference_host"], "test-agent 1.0")
+            self.assertEqual(payload["reference_host_source"], "declared-cli")
             self.assertEqual(payload["behavior"]["joint"]["failed"], 0)
             self.assertEqual(
                 payload["behavior_by_activation"]["not_activated"]["joint"],
@@ -410,6 +415,76 @@ class EvaluationIntegrityTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertEqual(payload["status"], "ERROR")
             self.assertIn("oracle is empty", str(payload["reason"]))
+
+    def test_evidence_mode_requires_a_reference_host(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            output = output_record()
+            write_jsonl(harness.oracle, [oracle_record()])
+            write_jsonl(harness.prompts, [prompt_record()])
+            write_jsonl(harness.outputs, [output])
+            write_jsonl(harness.judgments, judge_records(output))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCORER),
+                    "--oracle",
+                    str(harness.oracle),
+                    "--prompts",
+                    str(harness.prompts),
+                    "--outputs",
+                    str(harness.outputs),
+                    "--judgments",
+                    str(harness.judgments),
+                    "--condition",
+                    "implicit",
+                ],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            payload = json.loads(result.stdout)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(payload["status"], "ERROR")
+            self.assertIn("--reference-host", str(payload["reason"]))
+
+    def test_evidence_mode_rejects_non_printable_reference_host(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            output = output_record()
+            write_jsonl(harness.oracle, [oracle_record()])
+            write_jsonl(harness.prompts, [prompt_record()])
+            write_jsonl(harness.outputs, [output])
+            write_jsonl(harness.judgments, judge_records(output))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCORER),
+                    "--oracle",
+                    str(harness.oracle),
+                    "--prompts",
+                    str(harness.prompts),
+                    "--outputs",
+                    str(harness.outputs),
+                    "--judgments",
+                    str(harness.judgments),
+                    "--condition",
+                    "implicit",
+                    "--reference-host",
+                    "codex\x7fdesktop",
+                ],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+            payload = json.loads(result.stdout)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(payload["status"], "ERROR")
+            self.assertIn("printable", str(payload["reason"]))
 
 
 if __name__ == "__main__":

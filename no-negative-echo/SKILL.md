@@ -9,7 +9,7 @@ Describe the accepted result as if the audience never saw the working session. T
 
 ## Capability boundary
 
-This skill is a mitigation after activation, not a guarantee of semantic non-interference. It cannot force host-side invocation or erase information already present in the model context. Keep automatic invocation enabled, but explicitly re-invoke the skill for durable finalization surfaces after a long, compacted, delegated, or multi-turn session.
+This skill is a mitigation after activation, not a guarantee of semantic non-interference. It cannot force host-side invocation or erase information already present in the model context. Keep automatic invocation enabled when the host supports it, but explicitly re-invoke the skill through the host's native mechanism for durable finalization surfaces after a long, compacted, delegated, or multi-turn session.
 
 The protected surface is the requested artifact and its user-facing wrappers. Transparent tool calls, terminal output, approval prompts, and host-generated UI may expose control data. If the user also requires silence across those surfaces, state the platform limitation before proceeding and do not claim full compliance.
 
@@ -96,6 +96,10 @@ On preflight failure, revise and rerun the complete preflight; stop after two re
 
 Finish when the observed final state is understandable from the artifact, every surfaced exclusion passes the decision rule, required facts and pre-existing user changes remain intact, and executed external events are accurately reported where material.
 
-## Support scope
+## Portability boundary
 
-This package is adapted and validated for Codex Skill structure. Do not claim native Claude Code or Cursor support without separate installation and behavior tests for those harnesses.
+This directory uses the `name` and `description` frontmatter subset of the open Agent Skills `SKILL.md` format implemented by the documented hosts. The core instructions require no vendor-specific tool; the optional exact-text scanner requires Python 3.10+. `agents/openai.yaml` is optional Codex interface metadata, not part of the core behavior. A conforming host may install the same directory in its own discovery path.
+
+For a host without Agent Skills support, the Markdown body is only a one-task, best-effort prompt fallback. Use it in a fresh session together with the positive task specification. Do not call that fallback an installation, automatic activation, equivalent behavior, or a system instruction; bundled resources and relative script paths may be unavailable.
+
+Format compatibility is not behavior validation. Never infer that a host discovered or activated the skill, supplied a fresh context, preserved instruction priority, exposed complete surfaces, or supported a bundled script merely because it accepted the files. Verify the capabilities actually used, degrade unavailable steps to best-effort, and name the tested host and version in any effectiveness claim. Do not claim universal native support or equivalent behavior across agents.

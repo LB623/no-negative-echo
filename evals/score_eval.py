@@ -545,6 +545,19 @@ def _legacy(oracle, outputs, condition, run_ids):
     }, (1 if failed else 2)
 
 
+def _reference_host(value: str | None) -> str:
+    if value is None:
+        raise ValueError("evidence mode requires --reference-host")
+    normalized = value.strip()
+    if (
+        not normalized
+        or len(normalized) > 256
+        or not all(character.isprintable() for character in normalized)
+    ):
+        raise ValueError("reference host must be 1-256 printable characters")
+    return normalized
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--oracle", required=True, type=Path)
@@ -552,6 +565,10 @@ def main() -> int:
     p.add_argument("--outputs", required=True, type=Path)
     p.add_argument("--judgments", type=Path)
     p.add_argument("--routing-trace", type=Path)
+    p.add_argument(
+        "--reference-host",
+        help="declared host and version (required with --judgments)",
+    )
     p.add_argument(
         "--condition",
         required=True,
@@ -575,6 +592,7 @@ def main() -> int:
             payload, code = _legacy(oracle, outputs, a.condition, run_ids)
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return code
+        reference_host = _reference_host(a.reference_host)
         if a.prompts is None:
             raise ValueError("evidence mode requires --prompts for case binding")
         for row in oracle.values():
@@ -611,6 +629,9 @@ def main() -> int:
         payload = {
             "status": "FAIL" if failed else "PASS",
             "evaluation_mode": "independent-evidence",
+            "scope": "single-condition",
+            "reference_host": reference_host,
+            "reference_host_source": "declared-cli",
             "condition": a.condition,
             "runs": len(run_ids),
             "total": len(cases),

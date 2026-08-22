@@ -4,7 +4,7 @@
 
 <h1 align="center">No Negative Echo</h1>
 
-<p align="center"><strong>Codex final-output hygiene · Codex 最终交付清理 Skill</strong></p>
+<p align="center"><strong>Final-output hygiene for Agent Skills · 开放 Agent Skills 最终交付清理</strong></p>
 
 <p align="center"><em>Ship the result, not the conversation.</em></p>
 
@@ -16,7 +16,7 @@
   <a href="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml"><img src="https://github.com/LB623/no-negative-echo/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/LB623/no-negative-echo/stargazers"><img src="https://img.shields.io/github/stars/LB623/no-negative-echo?style=flat&amp;logo=github" alt="GitHub stars"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/LB623/no-negative-echo" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/Codex-Skill-F97316" alt="Codex Skill">
+  <img src="https://img.shields.io/badge/Agent%20Skills-open%20format-F97316" alt="Open Agent Skills format">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/docs-中文-E11D48" alt="中文文档">
 </p>
@@ -46,6 +46,8 @@
 
 它要求从最终采用且已经验证的状态重写正文和外层文案，并分别检查标题、文件名、代码注释、测试名、commit、PR、发布说明和交付说明。聊天里被否掉的草案通常只作为控制信息；真实基线变化、已执行的外部操作和必要的安全、迁移、兼容及审计事实仍须保留。
 
+运行包采用 [Agent Skills 开放格式](https://agentskills.io/specification)的公共子集。支持该格式的宿主可以原生发现它；其他能读取仓库文件的 Agent 可通过手动提示词加载。这里的“兼容”只指包结构和可用安装路径，不代表每个宿主上都已验证行为有效性。
+
 ### 为什么做这个 Skill
 
 我已经手改过太多次 commit message。其中一类改得最多，我给它起了个固定名字：「移除此地无银三百两」。
@@ -60,31 +62,64 @@
 
 ## 安装
 
-目前按 Codex Skill 结构适配，并提供确定性脚本测试和公开评测协议；仓库尚未发布模型行为有效性结果。
+该包遵循 Agent Skills 格式的 `SKILL.md` + 可选脚本/资源结构。开放规范定义包格式，不定义发现目录、调用语法或工具权限；下表的产品范围和目录来自各宿主的官方文档。仓库尚未发布跨宿主的模型行为有效性结果。
 
-### 让 Codex 直接安装
+### 给 Agent 一个 URL 安装
 
-把下面这段发给 Codex：
+把下面这段发给有网络、终端和文件权限的 Agent：
 
 ```text
-请安装 no-negative-echo Skill。克隆 https://github.com/LB623/no-negative-echo 后，先检查运行文件清单并运行 python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'，通过后再运行 python3 no-negative-echo/scripts/install_skill.py。告诉我安装路径、安装来源提交和验证结果，并提醒我下一轮对话开始使用。
+请安装 no-negative-echo Skill：
+https://raw.githubusercontent.com/LB623/no-negative-echo/main/INSTALL.md
+装完告诉我安装结果，以及是否需要开启新会话或重启。无法验证时，不要宣称安装成功。
 ```
+
+[`INSTALL.md`](INSTALL.md) 是面向 Agent 的安装合约：它要求识别宿主、临时克隆并记录 commit、先测试后安装、回读目标，最后明确报告是否需要新会话。它不假设任意 Agent 都原生支持 Skill。
 
 ### 命令行安装
 
 ```bash
-git clone --depth 1 https://github.com/LB623/no-negative-echo.git
-python3 -m unittest discover -s no-negative-echo/tests -p 'test_*.py'
-python3 no-negative-echo/scripts/install_skill.py
+git clone https://github.com/LB623/no-negative-echo.git
+python3 -I -m unittest discover -s no-negative-echo/tests -p 'test_*.py'
+python3 -I no-negative-echo/scripts/install_skill.py \
+  --expected-provenance-sha256 9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47 \
+  --discovery-root "$HOME/.agents/skills" \
+  --agent codex
 ```
 
-脚本默认安装到 `${CODEX_HOME:-$HOME/.codex}/skills/no-negative-echo`。它只接受固定运行文件清单，拒绝符号链接、特殊文件和未知文件；再次运行只会替换能验证为同名 Skill 的目录。新目标激活前，Python 能捕获的替换异常（包括 `KeyboardInterrupt`）会尝试恢复旧目录；恢复失败则报告需要人工检查的备份路径。新目标激活后就视为安装成功；清理旧备份失败只会警告并报告路径，不会把已激活的新版误报为未安装。进程崩溃、断电或 `SIGKILL` 仍可能在两次重命名之间留下 `.no-negative-echo-backup-*` 并使目标暂时缺失；重试前应先检查该备份。需要可复现安装时，请先 checkout 你信任的 tag 或 commit。
+上例安装到当前 Codex 路径；使用其他宿主时，按下表替换 preset。只在用户明确要求一份安装共享给多个宿主时使用 `--agent shared`。
 
-安装完成后，重新加载或重启 Codex。
+安装矩阵（官方文档核实日期：2026-08-22。“原生包”表示厂商明确支持 `SKILL.md`，不表示本仓库已在该宿主完成行为评测）：
 
-### 不安装：复制到 `AGENTS.md`
+| 宿主 / 产品范围 | 原生包 | 官方 user-level 根目录 | 安装器 preset | `~/.agents/skills` 共享 |
+|---|---|---|---|---|
+| [ChatGPT desktop app / Codex CLI / IDE extension](https://developers.openai.com/codex/skills) | 是 | `~/.agents/skills` | `--agent codex` 或 `--agent shared` | 是 |
+| [Claude Code](https://code.claude.com/docs/en/slash-commands) | 是 | `~/.claude/skills` | `--agent claude` | 官方未列出 |
+| [Cursor Agent / CLI](https://cursor.com/docs/skills) | 是 | `~/.cursor/skills` 或 `~/.agents/skills` | `--agent cursor` 或 `--agent shared` | 是 |
+| [Gemini CLI](https://geminicli.com/docs/cli/tutorials/skills-getting-started/) | 是 | `~/.gemini/skills` 或 `~/.agents/skills` | `--agent gemini` 或 `--agent shared` | 是 |
+| [GitHub Copilot CLI](https://docs.github.com/en/copilot/reference/customization-cheat-sheet) | 是 | `~/.copilot/skills` 或 `~/.agents/skills` | `--agent copilot` 或 `--agent shared` | 是 |
 
-只想先用一条轻量规则，可以把下面这段加到项目的 `AGENTS.md`：
+`--agent codex` 和 `--agent shared` 都使用 `~/.agents/skills`；该共享 user-level 路径当前也被 Cursor、Gemini CLI 和 GitHub Copilot 列出。无参数运行会优先使用当前 Codex 路径，仅在发现现有旧安装时继续使用它；`--agent codex-legacy` 才显式选择 `${CODEX_HOME:-$HOME/.codex}/skills`。该 legacy compatibility path 不是当前 OpenAI 文档中的推荐 user-level 目录。`--agent` 和高级 `--skills-dir /absolute/or/project/path` 互斥；自定义目录必须是绝对路径，且至少传一个 `--discovery-root`。安装前应把当前宿主所有已核实的 user/workspace 发现根分别用 `--discovery-root 绝对路径` 传入，让安装器在协调锁内复查并发冲突。自定义目录只能证明文件复制到了该位置，必须另外核对宿主是否发现它。项目级安装可将 `--skills-dir` 指向仓库的 `.agents/skills`（Codex/Cursor/Gemini/Copilot）或 `.claude/skills`（Claude Code）；GitHub Copilot 也支持 `.github/skills`。Copilot cloud agent 或 code review 要使用仓库内的项目级 Skill，不能依赖本机 home 目录。
+
+表中 preset 只适用于具有持久本地 home 的列出 surface，不代表 Codex cloud 或其他 web/remote/ephemeral surface 支持用户级安装。这些 surface 只能在官方文档明确项目级根目录、且用户授权修改当前仓库时使用 `--skills-dir`；否则应报告不支持，不能对临时 home 的复制声称持久安装成功。
+
+脚本会在所选根目录下创建 `no-negative-echo`。它只接受固定运行文件清单，拒绝符号链接、特殊文件和未知文件，并用 provenance marker 的文件哈希防止把用户改过的同名目录误当成官方安装覆盖。只有普通 `.DS_Store` 以及 `__pycache__` 直接包含的普通 `.pyc`/`.pyo` 会被当作可丢弃缓存；其他附加内容都会让安装原地停止。无 marker 的历史官方版只在完整路径和哈希精确匹配已知提交时才会自动迁移；自定义、不完整或其他无法识别的目录会原地保留并报错。暂存目录和已验证旧版的 recovery 目录都放在 Skill 发现根之外的同盘相邻位置；升级成功后旧版不会被自动递归删除，而是保留并报告精确路径，避免扫描到两份 Skill 或因路径交换误删数据。新目标重命名后还会重验运行清单、provenance 和目录身份；如无法确认，安装器会显式报告 activation uncertain 及目标/recovery 路径，不会普通报成功。在激活前，Python 能捕获的替换异常（包括 `KeyboardInterrupt`）会尝试恢复旧目录；恢复失败则报告需要人工检查的 recovery 路径。进程崩溃、断电或 `SIGKILL` 仍可能在两次重命名之间使目标暂时缺失；重试前应先检查报告的 recovery 路径。provenance 只是本次安装的完整性与所有权边界，不是代码签名。需要可复现安装时，请先 checkout 你信任的 tag 或 commit。
+
+有 marker 的旧目标还必须匹配安装器内置的官方 marker SHA-256；自写一份结构和内部哈希都自洽的 marker，也不构成自动覆盖授权。Claude preset 只按 Claude Code 自身的发现根判断冲突；由于 Cursor 也可读取 `.claude/skills`，同时使用 Cursor 的人还要确保 `.agents/skills`、`.cursor/skills`、`.claude/skills` 和 legacy `.codex/skills` 中只有一份可发现副本。
+
+早于 `.gitattributes` 的官方历史文本会先把 Windows checkout 的 CRLF 规范为 LF 再比对，二进制文件仍逐字节匹配；安装器不容忍其他内容变化。
+
+安装后按宿主的方式 reload/restart，再在技能列表中确认 `no-negative-echo`。目录存在只能证明文件已安装；列表可见只能证明已发现，两者都不能单独证明本轮已激活或行为有效。除非宿主能同时确认当前会话已重扫描且已激活，否则仍应报告需要或建议新会话，不能仅凭列表可见报告“不需要”。
+
+### 手动回退：不依赖原生 Skill 发现
+
+如果 Agent 可以读取克隆后的文件，但不支持 Agent Skills 或无法确认已发现，每次任务开始时显式发送：
+
+```text
+在开始任务前，请完整读取 ./no-negative-echo/SKILL.md，把相对路径视为相对 ./no-negative-echo，并在本轮遵循其中流程。交付时说明实际读取的文件和实际运行的检查；如果无法读取或运行脚本，请明确标注 best-effort，不要宣称 Skill 已被宿主激活。
+```
+
+只想持久放一条轻量规则时，也可把下面这段加到宿主能够稳定加载的项目指令文件（例如支持该文件的宿主中使用 `AGENTS.md`）：
 
 ```md
 ## 最终交付清理
@@ -95,23 +130,23 @@ python3 no-negative-echo/scripts/install_skill.py
 - 此规则只授权清理表述和交付组织。除非用户明确授权、任务本身要求并已完成相应验证，不得改写既有历史或外部记录，不得改变可执行行为、公共 API、协议、数据结构或配置格式、迁移与诊断语义、测试断言、覆盖范围、快照或 Golden 文件，也不得通过修改测试或快照掩盖失败。
 ```
 
-这是无需安装的轻量版，但不等价于完整 Skill：它没有长会话重新激活、分离生成与验证、扫描器、冻结与回读流程和完整验收闸门。不过 `AGENTS.md` 通常会被项目稳定加载；可以先用这一段，重要交付再安装并显式调用 Skill。
+这些是不依赖原生发现的回退方案，但不等价于完整 Skill：指令文件的名称、作用域和加载时机仍取决于宿主，轻量规则也没有长会话重新激活、分离生成与验证、扫描器、冻结与回读流程和完整验收闸门。
 
 <a id="usage"></a>
 
 ## 使用
 
-Codex 可以隐式加载它。长对话结束后，准备生成 commit、PR、发布标题或交付说明时，最好显式调用一次：
+支持隐式匹配的宿主可根据 `description` 自行选择该 Skill，但发现不等于激活。长对话结束后，准备生成 commit、PR、发布标题或交付说明时，最好显式指定它。Codex 的文档化语法是 `$no-negative-echo`，Claude Code 是 `/no-negative-echo`；其他宿主按其当前的原生方式选择 Skill，或在提示词中直接点名并验证实际激活，不要仅从输出措辞推断。
 
 ```text
-$no-negative-echo
+使用 no-negative-echo Skill。
 根据最终 diff 写 commit subject、PR 标题、PR 正文和交付说明。
 ```
 
 文章场景可以这样用：
 
 ```text
-$no-negative-echo
+使用 no-negative-echo Skill。
 根据最终保留的正文重写标题和开篇。
 ```
 
@@ -161,14 +196,14 @@ $no-negative-echo
 
 这是提示词层的缓解措施，不是确定性过滤器。它能降低会话残留进入成品的概率，但不能保证每次都拦住。
 
-- Codex 是否隐式加载 Skill 由宿主决定，做重要交付时最好显式调用。
+- Skill 是否被发现、隐式选中或显式激活，以及它获得的工具权限，都由宿主和当前 surface/version 决定。重要交付应显式指定并保留可观测证据。
 - Skill 无法擦除模型已经读到的上下文，也控制不了终端输出、工具日志和宿主生成的界面文案。
 - 自带扫描器只提供原始文本、文件名和可疑 Unicode 的确定性检查；传入 `--root` 时会检查相对路径中的目录名，否则只检查 basename。它不是渲染、语义、媒体或秘密扫描器，`PASS` 不能单独证明最终交付干净。
 - producer 或 validator 的上下文继承模式无法确认时，只能称为 best-effort，不能声称上下文已隔离或经过独立验证。
 - 它处理最终交付里的会话残留，不负责阻止模型一开始做多余的实现。
 - 凭据、个人信息和其他敏感数据仍应使用专门的密钥扫描或合规工具检查。
 
-Claude Code、Cursor 等环境还没有做过独立的安装和行为测试，本仓库不会把它们写成已支持平台。
+安装矩阵只证明各厂商文档声明的包格式和发现路径兼容，不证明本 Skill 在该宿主上会被正确路由，也不证明激活后的行为有效。对没有原生 Agent Skills 的 Agent，手动读取只是 best-effort 回退，不得标记为原生激活。`agents/openai.yaml` 是 OpenAI surface 的可选界面元数据，不是 Agent Skills 公共行为的前提。
 
 <a id="evaluation"></a>
 
@@ -177,20 +212,22 @@ Claude Code、Cursor 等环境还没有做过独立的安装和行为测试，�
 运行本地测试：
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -I -m unittest discover -s tests -p 'test_*.py'
 ```
 
 安装目录 [`no-negative-echo/`](no-negative-echo/) 只放运行时文件。评测提示和答案放在 [`evals/`](evals/) 里，避免开发用例跟着 Skill 一起进入模型上下文。
 
-公开用例只用于开发，跑通不等于问题消失。仓库提供无 Skill、固定对照提示、显式调用和隐式调用的评测协议，要求把 routing 与激活后的行为分开报告，并使用独立裁判、冻结输出、真实 surface 回读和未公开 holdout。CI 只运行确定性脚本与评分器测试，不运行 Codex 模型评测，也不产生有效性百分比。格式和统计限制见 [`evaluation-protocol.md`](evals/evaluation-protocol.md)。
+公开用例只用于开发，跑通不等于问题消失。仓库提供无 Skill、固定对照提示、显式调用和隐式调用的评测协议，要求把 routing 与激活后的行为分开报告，并使用独立裁判、冻结输出、真实 surface 回读和未公开 holdout。一次完整评测只需预先声明一个 reference host，并在四个条件中固定该宿主及版本；不需要把所有 Agent 都测一遍。其他宿主只作独立、可选的 replication，不与主评测混池。评分器每次只验证一个条件，`--reference-host` 也只是申报标签；完整的四条件一致性必须由调度器和冻结 manifest 审计保证。CI 只运行确定性脚本与评分器测试，不运行 Agent 模型评测，也不产生有效性百分比。格式和统计限制见 [`evaluation-protocol.md`](evals/evaluation-protocol.md)。
 
 <details>
 <summary>仓库结构</summary>
 
 ```text
 .
+├── .gitattributes
 ├── .github/workflows/test.yml
 ├── BACKGROUND.md
+├── INSTALL.md
 ├── LICENSE
 ├── README.md
 ├── README_EN.md
@@ -201,6 +238,7 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 │   ├── evaluation-protocol.md
 │   └── score_eval.py
 ├── no-negative-echo/
+│   ├── .no-negative-echo-provenance.json
 │   ├── SKILL.md
 │   ├── agents/openai.yaml
 │   ├── assets/
