@@ -635,7 +635,9 @@ def _load_provenance(root: Path) -> dict[str, object]:
         raise InstallValidationError("runtime provenance source is invalid")
 
     files = unique_object(payload["files"], "runtime provenance files")
-    expected_files = {str(path) for path in RUNTIME_FILES - {PROVENANCE_FILE}}
+    # Provenance is a serialized package format, so its path keys must not vary
+    # with the host operating system's path separator.
+    expected_files = {path.as_posix() for path in RUNTIME_FILES - {PROVENANCE_FILE}}
     if set(files) != expected_files:
         raise InstallValidationError("runtime provenance file manifest is invalid")
     for relative, expected_digest in files.items():

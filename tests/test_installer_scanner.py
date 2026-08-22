@@ -30,7 +30,7 @@ from install_skill import (  # noqa: E402
 
 def refresh_provenance(root: Path) -> None:
     files = {
-        str(relative): hashlib.sha256((root / relative).read_bytes()).hexdigest()
+        relative.as_posix(): hashlib.sha256((root / relative).read_bytes()).hexdigest()
         for relative in sorted(
             installer_module.RUNTIME_FILES - {installer_module.PROVENANCE_FILE},
             key=str,
@@ -48,6 +48,21 @@ def refresh_provenance(root: Path) -> None:
     installer_module.KNOWN_OFFICIAL_PROVENANCE_SHA256 = frozenset(
         {*installer_module.KNOWN_OFFICIAL_PROVENANCE_SHA256, test_digest}
     )
+
+
+def printed_messages(print_mock: mock.Mock) -> list[str]:
+    return [
+        call.args[0]
+        for call in print_mock.call_args_list
+        if call.args and isinstance(call.args[0], str)
+    ]
+
+
+def paths_refer_to_same_file(expected: Path, reported: str) -> bool:
+    try:
+        return os.path.samefile(expected, Path(reported))
+    except OSError:
+        return False
 
 
 def make_source(root: Path) -> Path:
@@ -256,9 +271,16 @@ class HardenedInstallerTests(unittest.TestCase):
     def test_current_runtime_marker_is_an_embedded_official_identity(self) -> None:
         marker = REPOSITORY_ROOT / "no-negative-echo" / installer_module.PROVENANCE_FILE
         digest = hashlib.sha256(marker.read_bytes()).hexdigest()
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+        expected_files = {
+            path.as_posix()
+            for path in installer_module.RUNTIME_FILES
+            - {installer_module.PROVENANCE_FILE}
+        }
 
         self.assertEqual(digest, installer_module.CURRENT_PROVENANCE_SHA256)
         self.assertIn(digest, installer_module.KNOWN_OFFICIAL_PROVENANCE_SHA256)
+        self.assertEqual(set(payload["files"]), expected_files)
 
     def test_default_skills_directories_follow_agent_conventions(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1419,8 +1441,10 @@ class HardenedInstallerTests(unittest.TestCase):
                 {target / "SKILL.md"},
             )
             self.assertEqual(len(notices), 1)
-            self.assertIn("previous validated installation", notices[0])
-            self.assertIn(str(backups[0]), notices[0])
+            prefix = "the previous validated installation was preserved at "
+            self.assertTrue(notices[0].startswith(prefix))
+            reported = notices[0][len(prefix) :].split(";", 1)[0]
+            self.assertTrue(paths_refer_to_same_file(backups[0], reported))
 
     def test_backup_path_swap_after_activation_deletes_nothing(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1460,7 +1484,10 @@ class HardenedInstallerTests(unittest.TestCase):
             )
             self.assertTrue((saved_backup / "SKILL.md").is_file())
             self.assertEqual(len(notices), 1)
-            self.assertIn(str(swapped_path), notices[0])
+            prefix = "the previous validated installation was preserved at "
+            self.assertTrue(notices[0].startswith(prefix))
+            reported = notices[0][len(prefix) :].split(";", 1)[0]
+            self.assertTrue(paths_refer_to_same_file(swapped_path, reported))
 
     def test_staging_cleanup_failure_is_a_post_activation_notice(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1516,7 +1543,10 @@ class HardenedInstallerTests(unittest.TestCase):
             )
             self.assertTrue(saved_staging.is_dir())
             self.assertEqual(len(notices), 1)
-            self.assertIn(str(swapped_path), notices[0])
+            prefix = "staging directory was preserved at "
+            self.assertTrue(notices[0].startswith(prefix))
+            reported = notices[0][len(prefix) :].split(": ", 1)[0]
+            self.assertTrue(paths_refer_to_same_file(swapped_path, reported))
 
     def test_unlock_failure_is_a_post_activation_notice(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1616,9 +1646,15 @@ class HardenedInstallerTests(unittest.TestCase):
             self.assertEqual(
                 coordination_lock.read_bytes(), installer_module.LOCK_MAGIC
             )
-            report = "\n".join(str(call) for call in print_mock.call_args_list)
-            self.assertIn(str(coordination_lock), report)
-            self.assertIn("migrated-legacy", report)
+            coordination_message = next(
+                message
+                for message in printed_messages(print_mock)
+                if message.startswith("Coordination lock: ")
+            )
+            suffix = " (migrated-legacy)"
+            self.assertTrue(coordination_message.endswith(suffix))
+            reported = coordination_message[len("Coordination lock: ") : -len(suffix)]
+            self.assertTrue(paths_refer_to_same_file(coordination_lock, reported))
 
     def test_main_reports_preserved_staging_path_on_failure(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1647,9 +1683,17 @@ class HardenedInstallerTests(unittest.TestCase):
             self.assertEqual(result, 1)
             staging = list(root.glob(".no-negative-echo-install-*"))
             self.assertEqual(len(staging), 1)
-            report = "\n".join(str(call) for call in print_mock.call_args_list)
-            self.assertIn(str(staging[0].resolve()), report)
-            self.assertIn("Install warning", report)
+            prefix = (
+                "Install warning: failed installation preserved staging data "
+                "for inspection at "
+            )
+            warning = next(
+                message
+                for message in printed_messages(print_mock)
+                if message.startswith(prefix)
+            )
+            reported = warning[len(prefix) :]
+            self.assertTrue(paths_refer_to_same_file(staging[0], reported))
             self.assertEqual((target / "valuable.bin").read_bytes(), b"preserve")
 
     def test_refuses_non_skill_destination_and_nested_skills_dir(self) -> None:
