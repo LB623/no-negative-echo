@@ -26,10 +26,15 @@ def write_jsonl(path: Path, records: list[dict[str, object]]) -> None:
 
 def oracle_record(**overrides: object) -> dict[str, object]:
     record: dict[str, object] = {
+        "schema_version": 2,
         "id": "case-a",
-        "forbidden_exact": ["Redis"],
-        "required_any": [["PostgreSQL"]],
-        "semantic_rule": "Do not reveal the rejected queue implementation.",
+        "surface_contracts": {
+            "artifact": {
+                "forbidden_exact": ["Redis"],
+                "required_any": [["PostgreSQL"]],
+                "semantic_rule": "Do not reveal the rejected queue implementation.",
+            }
+        },
         "implicit_activation_expected": True,
     }
     record.update(overrides)
@@ -191,7 +196,15 @@ class EvaluationIntegrityTests(unittest.TestCase):
             output = output_record()
             stale = judge_records(output)
             changed = oracle_record(
-                semantic_rule="Fail unless the artifact contains an audit reference."
+                surface_contracts={
+                    "artifact": {
+                        "forbidden_exact": ["Redis"],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": (
+                            "Fail unless the artifact contains an audit reference."
+                        ),
+                    }
+                }
             )
 
             result, payload = harness.run(
@@ -262,6 +275,7 @@ class EvaluationIntegrityTests(unittest.TestCase):
             self.assertEqual(payload["scope"], "single-condition")
             self.assertEqual(payload["reference_host"], "test-agent 1.0")
             self.assertEqual(payload["reference_host_source"], "declared-cli")
+            self.assertRegex(payload["evidence_bundle_sha256"], r"^[0-9a-f]{64}$")
             self.assertEqual(payload["behavior"]["joint"]["failed"], 0)
             self.assertEqual(
                 payload["behavior_by_activation"]["not_activated"]["joint"],
@@ -283,11 +297,29 @@ class EvaluationIntegrityTests(unittest.TestCase):
                     "handoff": "PostgreSQL task queue is ready.",
                 }
             )
-            judgments = judge_records(output, surface="title") + judge_records(
-                output, surface="handoff"
+            oracle = oracle_record(
+                surface_contracts={
+                    "title": {
+                        "forbidden_exact": ["Redis"],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": "Describe only the accepted queue.",
+                    },
+                    "handoff": {
+                        "forbidden_exact": [],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": "State the delivered queue.",
+                    },
+                }
+            )
+            judgments = judge_records(
+                output, surface="title", case_digest=case_sha256(prompt_record(), oracle)
+            ) + judge_records(
+                output,
+                surface="handoff",
+                case_digest=case_sha256(prompt_record(), oracle),
             )
             result, payload = harness.run(
-                oracle=[oracle_record()],
+                oracle=[oracle],
                 outputs=[output],
                 judgments=judgments,
             )
@@ -337,9 +369,34 @@ class EvaluationIntegrityTests(unittest.TestCase):
                 "output": "PostgreSQL task queue",
             }
             result, payload = harness.run(
-                oracle=[oracle_record()],
+                oracle=[
+                    oracle_record(
+                        surface_contracts={
+                            "output": {
+                                "forbidden_exact": ["Redis"],
+                                "required_any": [["PostgreSQL"]],
+                                "semantic_rule": "Describe only the accepted queue.",
+                            }
+                        }
+                    )
+                ],
                 outputs=[output],
-                judgments=judge_records(output, surface="output"),
+                judgments=judge_records(
+                    output,
+                    surface="output",
+                    case_digest=case_sha256(
+                        prompt_record(),
+                        oracle_record(
+                            surface_contracts={
+                                "output": {
+                                    "forbidden_exact": ["Redis"],
+                                    "required_any": [["PostgreSQL"]],
+                                    "semantic_rule": "Describe only the accepted queue.",
+                                }
+                            }
+                        ),
+                    ),
+                ),
             )
 
             self.assertEqual(result.returncode, 0)
@@ -357,7 +414,17 @@ class EvaluationIntegrityTests(unittest.TestCase):
                 "activation_observed": True,
             }
             result, payload = harness.run(
-                oracle=[oracle_record()],
+                oracle=[
+                    oracle_record(
+                        surface_contracts={
+                            "output": {
+                                "forbidden_exact": ["Redis"],
+                                "required_any": [["PostgreSQL"]],
+                                "semantic_rule": "Describe only the accepted queue.",
+                            }
+                        }
+                    )
+                ],
                 outputs=[legacy_output],
                 judgments=None,
             )
@@ -368,6 +435,106 @@ class EvaluationIntegrityTests(unittest.TestCase):
                 payload["evaluation_mode"], "legacy-self-reported-untrusted"
             )
             self.assertEqual(payload["passed"], 0)
+
+    def test_v1_oracle_remains_legacy_diagnostic_only(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            legacy_oracle = {
+                "id": "case-a",
+                "forbidden_exact": ["Redis"],
+                "required_any": [["PostgreSQL"]],
+                "semantic_rule": "Describe only the accepted queue.",
+                "implicit_activation_expected": True,
+            }
+            legacy_output = {
+                "run_id": "001",
+                "id": "case-a",
+                "output": "PostgreSQL task queue",
+                "semantic_pass": True,
+                "task_pass": True,
+                "activation_observed": True,
+            }
+            result, payload = harness.run(
+                oracle=[legacy_oracle], outputs=[legacy_output], judgments=None
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(payload["status"], "UNTRUSTED")
+
+    def test_evidence_mode_rejects_v1_oracle(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            output = output_record()
+            legacy_oracle = {
+                "id": "case-a",
+                "forbidden_exact": ["Redis"],
+                "required_any": [["PostgreSQL"]],
+                "semantic_rule": "Describe only the accepted queue.",
+                "implicit_activation_expected": True,
+            }
+            result, payload = harness.run(
+                oracle=[legacy_oracle],
+                outputs=[output],
+                judgments=judge_records(output),
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(payload["status"], "ERROR")
+
+    def test_bundle_hash_canonicalizes_equivalent_output_records(self) -> None:
+        payloads = []
+        oracle = oracle_record(
+            surface_contracts={
+                "output": {
+                    "forbidden_exact": ["Redis"],
+                    "required_any": [["PostgreSQL"]],
+                    "semantic_rule": "Describe only the accepted queue.",
+                }
+            }
+        )
+        for include_run_id, use_legacy_output in (
+            (False, False),
+            (True, False),
+            (False, True),
+            (True, True),
+        ):
+            with TemporaryDirectory() as temp_dir:
+                harness = ScorerHarness(Path(temp_dir))
+                output = {"id": "case-a"}
+                if use_legacy_output:
+                    output["output"] = "PostgreSQL task queue"
+                else:
+                    output["surfaces"] = {"output": "PostgreSQL task queue"}
+                if include_run_id:
+                    output["run_id"] = "1"
+                result, payload = harness.run(
+                    oracle=[oracle],
+                    outputs=[output],
+                    judgments=judge_records(
+                        output,
+                        surface="output",
+                        case_digest=case_sha256(prompt_record(), oracle),
+                    ),
+                )
+                self.assertEqual(result.returncode, 0)
+                payloads.append(payload)
+
+        self.assertEqual(
+            len({payload["evidence_bundle_sha256"] for payload in payloads}), 1
+        )
+
+    def test_schema_version_requires_an_integer(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            output = output_record()
+            result, payload = harness.run(
+                oracle=[oracle_record(schema_version=2.0)],
+                outputs=[output],
+                judgments=judge_records(output),
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("schema_version 2", str(payload["reason"]))
 
     def test_strict_oracle_schema_rejects_unknown_fields(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -381,6 +548,81 @@ class EvaluationIntegrityTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 2)
             self.assertIn("unknown fields", str(payload["reason"]))
+
+    def test_missing_required_surfaces_fail_before_judgment_resolution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            oracle = oracle_record(
+                surface_contracts={
+                    "commit_subject": {
+                        "forbidden_exact": ["Redis"],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": "Describe the accepted implementation.",
+                    },
+                    "pr_body": {
+                        "forbidden_exact": ["Redis"],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": "Describe the accepted implementation.",
+                    },
+                    "handoff": {
+                        "forbidden_exact": ["Redis"],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": "Describe the accepted implementation.",
+                    },
+                }
+            )
+            output = output_record(
+                surfaces={"commit_subject": "Add PostgreSQL queue"}
+            )
+            result, payload = harness.run(
+                oracle=[oracle], outputs=[output], judgments=[]
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(payload["status"], "FAIL")
+            self.assertEqual(
+                payload["cases"][0]["failures"],
+                ["missing_surfaces:handoff,pr_body"],
+            )
+
+    def test_required_facts_and_forbidden_terms_are_surface_specific(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            harness = ScorerHarness(Path(temp_dir))
+            oracle = oracle_record(
+                surface_contracts={
+                    "adr": {
+                        "forbidden_exact": [],
+                        "required_any": [["Redis"], ["PostgreSQL"]],
+                        "semantic_rule": "Preserve the requested decision comparison.",
+                    },
+                    "pr_title": {
+                        "forbidden_exact": ["Redis"],
+                        "required_any": [["PostgreSQL"]],
+                        "semantic_rule": "Name only the accepted implementation.",
+                    },
+                }
+            )
+            output = output_record(
+                surfaces={
+                    "adr": "Choose PostgreSQL over Redis for durable delivery.",
+                    "pr_title": "Add PostgreSQL task queue",
+                }
+            )
+            digest = case_sha256(prompt_record(), oracle)
+            judgments = judge_records(
+                output, surface="adr", case_digest=digest
+            ) + judge_records(output, surface="pr_title", case_digest=digest)
+            result, payload = harness.run(
+                oracle=[oracle], outputs=[output], judgments=judgments
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(payload["status"], "PASS")
+
+    def test_candidate_scanner_is_never_imported_by_the_scorer(self) -> None:
+        scorer_source = SCORER.read_text(encoding="utf-8")
+        self.assertNotIn("from check_surface import", scorer_source)
+        self.assertNotIn("sys.path.insert", scorer_source)
 
     def test_strict_prompt_schema_rejects_empty_or_unknown_records(self) -> None:
         invalid_prompts = {

@@ -16,16 +16,37 @@ manual-loading fallback separately.
 
 Run each producer in a fresh, isolated working directory that contains only the synthetic task files and the assigned runtime Skill. The producer must not be able to read this repository, `evaluation-oracle.jsonl`, judgments, prior outputs, or another condition's artifacts. Deny those paths at the filesystem boundary and retain a tool-access audit; a prompt saying “do not read the oracle” is not isolation.
 
-Before execution, freeze an evaluation manifest containing the declared `reference_host`, every scheduled `run_id`, case ID, condition, prompt checksum, model and snapshot, sampling settings, harness and host version, system-instruction checksum, Skill checksum and discovery path, installed Skill inventory, working directory, context limit, compaction setting, and random seed where supported. Missing and crashed scheduled runs stay in the denominator. The scorer's `--expected-run-ids` file is the newline-separated projection of this manifest.
+Before execution, freeze an evaluation manifest containing the declared `reference_host`, every scheduled `run_id`, case ID, condition, prompt checksum, required surface names, model and snapshot, sampling settings, harness and host version, system-instruction checksum, Skill checksum and discovery path, installed Skill inventory, working directory, context limit, compaction setting, and random seed where supported. Missing and crashed scheduled runs stay in the denominator. The scorer's `--expected-run-ids` file is the newline-separated projection of this manifest.
 
 Keep four roles separate:
 
 1. The orchestrator reads the protocol and manifest.
-2. A fresh producer receives only one prompt and its assigned condition.
+2. A fresh producer receives only one prompt, its assigned condition, and the
+   required surface names (never the hidden policies).
 3. At least two blinded judges independently score the frozen surfaces. Judges do not see condition, model identity, other verdicts, or prior outputs.
 4. A separate adjudicator resolves any disagreement without editing the output.
 
+The evaluator owns all parsing, normalization, exact matching, hashing, and
+scoring code. It must never import or execute the candidate Skill, its scanner,
+or any producer-supplied module. Run the scorer from a read-only,
+evaluator-controlled checkout with Python isolated mode. Treat every frozen
+surface as untrusted data: judge prompts delimit it as quoted artifact content,
+state that instructions inside it are data, and include adversarial
+instruction-like artifacts in judge validation tests.
+
 Store producer outputs, host routing traces, judgments, manifests, and readbacks as separate immutable artifacts. Bind every judgment both to the scorer's canonical `output_sha256` of `run_id`, case ID, and the complete `surfaces` object, and to its `case_sha256` of the complete prompt and strict oracle records. Regenerate judgments whenever either digest changes. Deliberately exclude condition from `case_sha256`: otherwise a judge who knows the prompt and oracle can enumerate four hashes and recover the blinded condition. The orchestrator links frozen judgments to condition only afterward through the pre-execution manifest; do not expose condition or a reversible condition commitment to judges.
+
+A trusted collector—not the producer—reads each final filesystem/Git/external
+surface and serializes it under the pre-registered surface name. The collector
+must not execute artifact content or infer a missing surface from producer
+prose. Preserve its readback log and implementation digest in the evaluation
+manifest; `output_sha256` binds the collected values after that boundary.
+
+The scorer also reports `evidence_bundle_sha256`, a canonical digest over the
+declared host, condition, run IDs, oracle, prompts, outputs, judgments, and
+routing traces. Retain that digest with the immutable evaluation manifest and
+published result. It detects later bundle substitution; it is not a signature
+and does not authenticate who collected the evidence.
 
 Public fixtures are a development set. Generalization claims require an independently authored holdout unavailable to producers, judges, and Skill authors during iteration.
 
@@ -64,17 +85,30 @@ The producer-visible prompt schema is strict and contains exactly one of a non-e
 {"id":"multi-turn-case","messages":[{"role":"user","content":"..."},{"role":"assistant","content":"..."},{"role":"user","content":"Finalize it."}]}
 ```
 
-The oracle schema is strict:
+The oracle schema is strict. `surface_contracts` is a non-empty object whose
+keys are the complete required surface set. Each surface has its own exact,
+required-fact, and semantic policy:
 
 ```json
-{"id":"case-id","forbidden_exact":["discarded term"],"required_any":[["required", "synonym"]],"semantic_rule":"Blinded decision rule.","implicit_activation_expected":true}
+{"schema_version":2,"id":"case-id","surface_contracts":{"commit_subject":{"forbidden_exact":["discarded term"],"required_any":[["required", "synonym"]],"semantic_rule":"Blinded rule for this surface."},"handoff":{"forbidden_exact":[],"required_any":[],"semantic_rule":"Independent handoff rule."}},"implicit_activation_expected":true}
 ```
+
+Schema v1 records without `schema_version` remain accepted only by the legacy
+self-reported diagnostic path, which always returns nonzero `UNTRUSTED` or
+`FAIL`. Evidence mode requires schema v2 and fresh judgments because the case
+hash schema changed; v1 bundles cannot be upgraded into a trusted `PASS`.
 
 Producer output uses named surfaces. Legacy `output` is accepted as one surface named `output`. Producer records must not contain verdicts or activation claims.
 
 ```json
 {"run_id":"001","id":"case-id","surfaces":{"title":"...","artifact":"...","commit_subject":"...","handoff":"..."}}
 ```
+
+The producer's actual surface names must equal the oracle's required surface
+set exactly. Missing or unexpected surfaces are case failures before judgment
+resolution; a producer cannot pass by omitting a difficult commit, PR, release,
+or handoff surface. Use the legacy `output` form only with a single contract
+named `output`.
 
 Judgments live in a separate JSONL file. Supply at least two distinct non-adjudicator `judge_id` values for every surface. Each judge independently records both co-primary outcomes:
 
@@ -96,8 +130,8 @@ Use `null` with a concrete source when the host cannot expose activation. Missin
 
 Report separately:
 
-1. **Residue control:** deterministic forbidden-term checks plus the resolved blinded semantic verdict on every surface.
-2. **Task preservation:** required facts across the complete artifact plus the resolved task verdict on every surface.
+1. **Residue control:** each surface's deterministic forbidden-term checks plus its resolved blinded semantic verdict.
+2. **Task preservation:** each surface's required facts plus its resolved task verdict.
 3. **Joint behavior:** both co-primary outcomes pass.
 4. **Routing:** an independent confusion matrix and observation coverage.
 
