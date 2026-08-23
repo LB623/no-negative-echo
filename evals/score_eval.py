@@ -10,19 +10,23 @@ from pathlib import Path
 import re
 import sys
 from typing import Any, Literal
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "no-negative-echo" / "scripts"))
-from check_surface import normalize  # noqa: E402
+import unicodedata
 
 Condition = Literal["no-skill", "comparator", "explicit", "implicit"]
 ORACLE_FIELDS = {
+    "schema_version",
+    "id",
+    "surface_contracts",
+    "implicit_activation_expected",
+}
+ORACLE_V1_FIELDS = {
     "id",
     "forbidden_exact",
     "required_any",
     "semantic_rule",
     "implicit_activation_expected",
 }
+SURFACE_CONTRACT_FIELDS = {"forbidden_exact", "required_any", "semantic_rule"}
 PROMPT_FIELDS = {"id", "prompt", "messages"}
 MESSAGE_FIELDS = {"role", "content"}
 OUTPUT_FIELDS = {"run_id", "id", "output", "surfaces"}
@@ -40,6 +44,11 @@ JUDGE_FIELDS = {
 }
 ROUTE_FIELDS = {"run_id", "id", "activation_observed", "source"}
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def normalize(value: str) -> str:
+    """Evaluator-owned normalization; never import code from the candidate Skill."""
+    return unicodedata.normalize("NFKC", value).casefold()
 
 
 def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -125,22 +134,69 @@ def validate_oracle(row: dict[str, Any]) -> None:
         raise ValueError(f"oracle {row.get('id')} is missing fields: {missing}")
     if not isinstance(row["id"], str) or not row["id"]:
         raise ValueError("oracle id must be a non-empty string")
-    if not isinstance(row["forbidden_exact"], list) or any(
-        not isinstance(x, str) or not x for x in row["forbidden_exact"]
-    ):
-        raise ValueError(f"oracle {row['id']} has invalid forbidden_exact")
-    groups = row["required_any"]
-    if not isinstance(groups, list) or any(
-        not isinstance(g, list)
-        or not g
-        or any(not isinstance(x, str) or not x for x in g)
-        for g in groups
-    ):
-        raise ValueError(f"oracle {row['id']} has invalid required_any")
-    if not isinstance(row["semantic_rule"], str) or not row["semantic_rule"].strip():
-        raise ValueError(f"oracle {row['id']} has invalid semantic_rule")
+    if type(row["schema_version"]) is not int or row["schema_version"] != 2:
+        raise ValueError(f"oracle {row['id']} requires schema_version 2")
+    contracts = row["surface_contracts"]
+    if not isinstance(contracts, dict) or not contracts:
+        raise ValueError(f"oracle {row['id']} has invalid surface_contracts")
+    for name, contract in contracts.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"oracle {row['id']} has invalid surface name")
+        if not isinstance(contract, dict) or set(contract) != SURFACE_CONTRACT_FIELDS:
+            raise ValueError(
+                f"oracle {row['id']} surface {name} has invalid contract fields"
+            )
+        forbidden = contract["forbidden_exact"]
+        if not isinstance(forbidden, list) or any(
+            not isinstance(x, str) or not x for x in forbidden
+        ):
+            raise ValueError(
+                f"oracle {row['id']} surface {name} has invalid forbidden_exact"
+            )
+        groups = contract["required_any"]
+        if not isinstance(groups, list) or any(
+            not isinstance(group, list)
+            or not group
+            or any(not isinstance(x, str) or not x for x in group)
+            for group in groups
+        ):
+            raise ValueError(
+                f"oracle {row['id']} surface {name} has invalid required_any"
+            )
+        rule = contract["semantic_rule"]
+        if not isinstance(rule, str) or not rule.strip():
+            raise ValueError(
+                f"oracle {row['id']} surface {name} has invalid semantic_rule"
+            )
     if not isinstance(row["implicit_activation_expected"], bool):
         raise ValueError(f"oracle {row['id']} has invalid implicit_activation_expected")
+
+
+def validate_legacy_oracle(row: dict[str, Any]) -> None:
+    if set(row) == ORACLE_V1_FIELDS:
+        if not isinstance(row["id"], str) or not row["id"]:
+            raise ValueError("oracle id must be a non-empty string")
+        forbidden = row["forbidden_exact"]
+        if not isinstance(forbidden, list) or any(
+            not isinstance(term, str) or not term for term in forbidden
+        ):
+            raise ValueError(f"oracle {row['id']} has invalid forbidden_exact")
+        groups = row["required_any"]
+        if not isinstance(groups, list) or any(
+            not isinstance(group, list)
+            or not group
+            or any(not isinstance(term, str) or not term for term in group)
+            for group in groups
+        ):
+            raise ValueError(f"oracle {row['id']} has invalid required_any")
+        if not isinstance(row["semantic_rule"], str) or not row["semantic_rule"].strip():
+            raise ValueError(f"oracle {row['id']} has invalid semantic_rule")
+        if not isinstance(row["implicit_activation_expected"], bool):
+            raise ValueError(
+                f"oracle {row['id']} has invalid implicit_activation_expected"
+            )
+        return
+    validate_oracle(row)
 
 
 def validate_prompt(row: dict[str, Any]) -> None:
@@ -216,11 +272,18 @@ def output_sha256(row: dict[str, Any]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def canonical_sha256(value: Any) -> str:
+    raw = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
 def case_sha256(prompt: dict[str, Any], oracle: dict[str, Any]) -> str:
     validate_prompt(prompt)
     validate_oracle(oracle)
     payload = {
-        "schema": "no-negative-echo-case-v1",
+        "schema": "no-negative-echo-case-v2",
         "prompt": prompt,
         "oracle": oracle,
     }
@@ -322,17 +385,41 @@ def score_case(
     """Keep the legacy API; evidence mode never calls this helper."""
     if output is None:
         return ["missing_output"]
-    text = output.get("output")
-    if not isinstance(text, str) or not text.strip():
-        return ["empty_output"]
+    contracts = oracle.get("surface_contracts")
+    if not isinstance(contracts, dict):
+        text = output.get("output")
+        if not isinstance(text, str) or not text.strip():
+            return ["empty_output"]
+        failures = []
+        if any(has_term(text, term) for term in oracle.get("forbidden_exact", [])):
+            failures.append("exact_leak")
+        if any(
+            not any(has_term(text, term) for term in group)
+            for group in oracle.get("required_any", [])
+        ):
+            failures.append("missing_required_fact")
+        if output.get("semantic_pass") is not True:
+            failures.append("semantic_not_passed")
+        if output.get("task_pass") is not True:
+            failures.append("task_not_passed")
+        if output.get("activation_observed") is not expected_activation(
+            oracle, condition
+        ):
+            failures.append("routing_mismatch")
+        return sorted(set(failures))
+    surfaces = _surfaces(output, False)
     failures = []
-    if any(has_term(text, x) for x in oracle.get("forbidden_exact", [])):
-        failures.append("exact_leak")
-    if any(
-        not any(has_term(text, x) for x in group)
-        for group in oracle.get("required_any", [])
-    ):
-        failures.append("missing_required_fact")
+    if set(surfaces) != set(contracts):
+        failures.append("surface_contract_mismatch")
+    for name in sorted(set(surfaces) & set(contracts)):
+        text, contract = surfaces[name], contracts[name]
+        if not text.strip():
+            failures.append(f"empty_surface:{name}")
+        if any(has_term(text, x) for x in contract.get("forbidden_exact", [])):
+            failures.append(f"exact_leak:{name}")
+        for index, group in enumerate(contract.get("required_any", []), 1):
+            if not any(has_term(text, x) for x in group):
+                failures.append(f"missing_required_fact:{name}:{index}")
     if output.get("semantic_pass") is not True:
         failures.append("semantic_not_passed")
     if output.get("task_pass") is not True:
@@ -426,8 +513,29 @@ def score_evidence_case(oracle, prompt, output, judgments, run_id, case_id):
     surfaces = _surfaces(output)
     output_digest = output_sha256(output)
     case_digest = case_sha256(prompt, oracle)
+    contracts = oracle["surface_contracts"]
+    if set(surfaces) != set(contracts):
+        missing = sorted(set(contracts) - set(surfaces))
+        unexpected = sorted(set(surfaces) - set(contracts))
+        failures = []
+        if missing:
+            failures.append(f"missing_surfaces:{','.join(missing)}")
+        if unexpected:
+            failures.append(f"unexpected_surfaces:{','.join(unexpected)}")
+        return {
+            "run_id": run_id,
+            "id": case_id,
+            "output_sha256": output_digest,
+            "case_sha256": case_digest,
+            "status": "FAIL",
+            "residue_pass": False,
+            "task_pass": False,
+            "failures": failures,
+            "surfaces": {},
+        }
     results, failures, residue_ok, task_ok = {}, [], True, True
     for name, text in surfaces.items():
+        contract = contracts[name]
         verdict = _resolve(
             judgments.get((run_id, case_id, name), []),
             output_digest,
@@ -435,7 +543,7 @@ def score_evidence_case(oracle, prompt, output, judgments, run_id, case_id):
             (run_id, case_id, name),
         )
         sf = []
-        if any(has_term(text, x) for x in oracle["forbidden_exact"]):
+        if any(has_term(text, x) for x in contract["forbidden_exact"]):
             sf.append("exact_leak")
         if not verdict["residue_pass"]:
             sf.append("residue_not_passed")
@@ -443,8 +551,15 @@ def score_evidence_case(oracle, prompt, output, judgments, run_id, case_id):
             sf.append("empty_surface")
         if not verdict["task_pass"]:
             sf.append("task_not_passed")
+        for index, group in enumerate(contract["required_any"], 1):
+            if not any(has_term(text, x) for x in group):
+                sf.append(f"missing_required_fact:{index}")
         ro = not any(x in {"exact_leak", "residue_not_passed"} for x in sf)
-        to = not any(x in {"empty_surface", "task_not_passed"} for x in sf)
+        to = not any(
+            x in {"empty_surface", "task_not_passed"}
+            or x.startswith("missing_required_fact:")
+            for x in sf
+        )
         residue_ok &= ro
         task_ok &= to
         failures += [f"{x}:{name}" for x in sf]
@@ -457,11 +572,6 @@ def score_evidence_case(oracle, prompt, output, judgments, run_id, case_id):
             "judge_ids": verdict["judge_ids"],
             "adjudicator_id": verdict["adjudicator_id"],
         }
-    combined = "\n".join(surfaces.values())
-    for i, group in enumerate(oracle["required_any"], 1):
-        if not any(has_term(combined, x) for x in group):
-            task_ok = False
-            failures.append(f"missing_required_fact:{i}")
     return {
         "run_id": run_id,
         "id": case_id,
@@ -589,6 +699,8 @@ def main() -> int:
         if unknown:
             raise ValueError(f"unknown output ids: {unknown}")
         if a.judgments is None:
+            for row in oracle.values():
+                validate_legacy_oracle(row)
             payload, code = _legacy(oracle, outputs, a.condition, run_ids)
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return code
@@ -633,6 +745,35 @@ def main() -> int:
             "reference_host": reference_host,
             "reference_host_source": "declared-cli",
             "condition": a.condition,
+            "evidence_bundle_sha256": canonical_sha256(
+                {
+                    "schema": "no-negative-echo-evidence-v1",
+                    "reference_host": reference_host,
+                    "condition": a.condition,
+                    "run_ids": run_ids,
+                    "oracle": [oracle[key] for key in sorted(oracle)],
+                    "prompts": [prompts[key] for key in sorted(prompts)],
+                    "outputs": [
+                        {
+                            "run_id": outputs[key].get("run_id", "1"),
+                            "id": outputs[key]["id"],
+                            "surfaces": _surfaces(outputs[key], False),
+                        }
+                        for key in sorted(outputs)
+                    ],
+                    "judgments": [
+                        record
+                        for key in sorted(judgments)
+                        for record in sorted(
+                            judgments[key], key=lambda item: item["judge_id"]
+                        )
+                    ],
+                    "routing_traces": [
+                        {**traces[key], "run_id": traces[key].get("run_id", "1")}
+                        for key in sorted(traces)
+                    ],
+                }
+            ),
             "runs": len(run_ids),
             "total": len(cases),
             "passed": behavior["joint"]["passed"],

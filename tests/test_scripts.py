@@ -23,6 +23,7 @@ from score_eval import (  # noqa: E402
     load_outputs,
     routing_summary,
     score_case,
+    validate_oracle,
 )
 
 
@@ -48,8 +49,13 @@ class EvaluationScoringTests(unittest.TestCase):
 
     def test_complete_case_passes(self) -> None:
         oracle = {
-            "forbidden_exact": ["redis"],
-            "required_any": [["postgresql"]],
+            "surface_contracts": {
+                "output": {
+                    "forbidden_exact": ["redis"],
+                    "required_any": [["postgresql"]],
+                    "semantic_rule": "Describe only the accepted queue.",
+                }
+            },
             "implicit_activation_expected": True,
         }
         output = {
@@ -62,8 +68,13 @@ class EvaluationScoringTests(unittest.TestCase):
 
     def test_all_failure_classes_are_reported(self) -> None:
         oracle = {
-            "forbidden_exact": ["redis"],
-            "required_any": [["postgresql"]],
+            "surface_contracts": {
+                "output": {
+                    "forbidden_exact": ["redis"],
+                    "required_any": [["postgresql"]],
+                    "semantic_rule": "Describe only the accepted queue.",
+                }
+            },
             "implicit_activation_expected": True,
         }
         output = {
@@ -75,8 +86,8 @@ class EvaluationScoringTests(unittest.TestCase):
         self.assertEqual(
             score_case(oracle, output, "implicit"),
             [
-                "exact_leak",
-                "missing_required_fact",
+                "exact_leak:output",
+                "missing_required_fact:output:1",
                 "routing_mismatch",
                 "semantic_not_passed",
                 "task_not_passed",
@@ -85,8 +96,13 @@ class EvaluationScoringTests(unittest.TestCase):
 
     def test_explicit_invocation_overrides_non_trigger_routing(self) -> None:
         oracle = {
-            "forbidden_exact": [],
-            "required_any": [["tomato"]],
+            "surface_contracts": {
+                "output": {
+                    "forbidden_exact": [],
+                    "required_any": [["tomato"]],
+                    "semantic_rule": "Keep the requested subject.",
+                }
+            },
             "implicit_activation_expected": False,
         }
         output = {
@@ -170,7 +186,9 @@ class EvaluationScoringTests(unittest.TestCase):
             outputs_path = root / "outputs.jsonl"
             run_ids_path = root / "run-ids.txt"
             oracle_path.write_text(
-                '{"id":"case-a","forbidden_exact":[],"required_any":[],'
+                '{"schema_version":2,"id":"case-a","surface_contracts":{"output":{'
+                '"forbidden_exact":[],"required_any":[],'
+                '"semantic_rule":"Keep the requested output."}},'
                 '"implicit_activation_expected":true}\n',
                 encoding="utf-8",
             )
@@ -213,7 +231,9 @@ class EvaluationScoringTests(unittest.TestCase):
             oracle_path = root / "oracle.jsonl"
             outputs_path = root / "outputs.jsonl"
             oracle_path.write_text(
-                '{"id":"case-a","forbidden_exact":[],"required_any":[],'
+                '{"schema_version":2,"id":"case-a","surface_contracts":{"output":{'
+                '"forbidden_exact":[],"required_any":[],'
+                '"semantic_rule":"Keep the requested output."}},'
                 '"implicit_activation_expected":true}\n',
                 encoding="utf-8",
             )
@@ -389,6 +409,8 @@ class FixtureContractTests(unittest.TestCase):
         prompts = load_jsonl(REPOSITORY_ROOT / "evals" / "evaluation-prompts.jsonl")
         oracle = load_jsonl(REPOSITORY_ROOT / "evals" / "evaluation-oracle.jsonl")
         self.assertEqual(prompts.keys(), oracle.keys())
+        for row in oracle.values():
+            validate_oracle(row)
 
     def test_implicit_routing_has_positive_and_negative_cases(self) -> None:
         oracle = load_jsonl(REPOSITORY_ROOT / "evals" / "evaluation-oracle.jsonl")
