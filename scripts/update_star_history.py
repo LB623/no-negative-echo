@@ -10,7 +10,7 @@ import os
 import re
 import urllib.error
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Iterable
 from xml.sax.saxutils import escape
@@ -74,6 +74,7 @@ def _next_link(header: str) -> str | None:
 
 
 def daily_series(timestamps: Iterable[datetime], through: date) -> list[tuple[date, int]]:
+    """Return the legacy daily aggregation used by older callers and tests."""
     days = sorted(timestamp.astimezone(timezone.utc).date() for timestamp in timestamps)
     if not days:
         return [(through, 0)]
@@ -94,79 +95,155 @@ def daily_series(timestamps: Iterable[datetime], through: date) -> list[tuple[da
     return result
 
 
-def _nice_ceiling(value: int) -> int:
-    if value <= 4:
-        return max(1, value)
-    magnitude = 10 ** math.floor(math.log10(value))
-    for multiple in (1, 2, 4, 5, 10):
-        candidate = multiple * magnitude
-        if candidate >= value:
-            return candidate
-    raise AssertionError("unreachable")
+def _nice_axis(value: int, desired_intervals: int = 5) -> tuple[int, int]:
+    """Return a human scale ceiling and interval (222 -> 250 by 50)."""
+    if value <= 0:
+        return 5, 1
+    rough_interval = value / desired_intervals
+    magnitude = 10 ** math.floor(math.log10(rough_interval))
+    normalized = rough_interval / magnitude
+    multiple = next(item for item in (1, 2, 2.5, 5, 10) if item >= normalized)
+    interval = max(1, round(multiple * magnitude))
+    return math.ceil(value / interval) * interval, interval
 
 
-def _sample_indices(length: int, desired: int) -> list[int]:
-    if length <= 1:
-        return [0]
-    return sorted({round(index * (length - 1) / (desired - 1)) for index in range(desired)})
+def _utc(timestamp: datetime) -> datetime:
+    if timestamp.tzinfo is None:
+        raise ValueError("stargazer timestamps must be timezone-aware")
+    return timestamp.astimezone(timezone.utc)
 
 
-def render_svg(repository: str, series: list[tuple[date, int]], generated_on: date) -> str:
-    if not series:
-        raise ValueError("series must contain at least one point")
-
-    width, height = 1100, 600
-    left, right, top, bottom = 105, 55, 115, 85
+def render_svg(
+    repository: str,
+    timestamps: Iterable[datetime],
+    generated_on: date,
+    *,
+    source_label: str = "GITHUB STARGAZERS API",
+) -> str:
+    """Render every stargazer event as a seekable step trace."""
+    stars = sorted(_utc(timestamp) for timestamp in timestamps)
+    width, height = 1120, 560
+    left, right, top, bottom = 88, 42, 148, 74
     plot_width = width - left - right
     plot_height = height - top - bottom
-    max_count = _nice_ceiling(max(value for _, value in series))
+    total = len(stars)
+    max_count, interval = _nice_axis(total)
 
-    def x(index: int) -> float:
-        return left if len(series) == 1 else left + plot_width * index / (len(series) - 1)
+    snapshot = datetime.combine(generated_on, time.max, tzinfo=timezone.utc)
+    if stars:
+        start_time = stars[0]
+        end_time = max(stars[-1], snapshot)
+    else:
+        start_time = datetime.combine(generated_on, time.min, tzinfo=timezone.utc)
+        end_time = snapshot
+    span = max((end_time - start_time).total_seconds(), 1)
+
+    def x(timestamp: datetime) -> float:
+        elapsed = (_utc(timestamp) - start_time).total_seconds()
+        return left + plot_width * max(0, min(elapsed / span, 1))
 
     def y(value: int) -> float:
         return top + plot_height * (1 - value / max_count)
 
-    points = " ".join(f"{x(index):.1f},{y(value):.1f}" for index, (_, value) in enumerate(series))
-    area_points = f"{left},{top + plot_height} {points} {left + plot_width},{top + plot_height}"
-    total = series[-1][1]
+    # Every event gets a horizontal approach and a vertical increment. Unlike a
+    # daily polyline, this preserves bursts and quiet periods in the API data.
+    commands = [f"M {left:.1f} {y(0):.1f}"]
+    for count, timestamp in enumerate(stars, 1):
+        event_x = x(timestamp)
+        commands.extend((f"H {event_x:.1f}", f"V {y(count):.1f}"))
+    commands.append(f"H {left + plot_width:.1f}")
+    trace_path = " ".join(commands)
+    area_path = (
+        f"{trace_path} V {top + plot_height:.1f} H {left:.1f} Z"
+        if stars
+        else f"M {left:.1f} {top + plot_height:.1f} H {left + plot_width:.1f} Z"
+    )
+
     title = escape(repository)
+    source = escape(source_label.upper())
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">',
-        f"<title id=\"title\">Star history for {title}</title>",
-        f"<desc id=\"desc\">{total} current GitHub stargazers as of {generated_on.isoformat()}</desc>",
-        '<rect width="1100" height="600" rx="14" fill="#ffffff"/>',
-        '<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.label{fill:#64748b;font-size:18px}.tick{fill:#64748b;font-size:15px}.grid{stroke:#e2e8f0;stroke-width:1}.axis{stroke:#94a3b8;stroke-width:1.5}</style>',
-        f'<circle cx="67" cy="55" r="7" fill="#f97316"/><text x="86" y="63" fill="#0f172a" font-size="25" font-weight="650">{title}</text>',
-        f'<text x="{width - 55}" y="63" text-anchor="end" fill="#0f172a" font-size="25" font-weight="650">★ {total}</text>',
+        f'<title id="title">Stargazer trace for {title}</title>',
+        f'<desc id="desc">{total} current GitHub stargazers as of {generated_on.isoformat()}; each step represents one stargazer event.</desc>',
+        "<defs>",
+        '<linearGradient id="signal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7a18" stop-opacity=".22"/><stop offset="1" stop-color="#ff7a18" stop-opacity="0"/></linearGradient>',
+        '<filter id="signal-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
+        "</defs>",
+        "<style>",
+        ".surface{fill:#f6f8fa}.panel{fill:#fff;stroke:#d8dee4}.divider,.grid{stroke:#d8dee4}.grid{stroke-dasharray:2 7}.ink{fill:#1f2328}.muted{fill:#656d76}.faint{fill:#8c959f}.sans{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.signal{stroke:#f76707}.endpoint{fill:#f76707;stroke:#fff}.milestone-line{stroke:#f76707}.milestone-dot{fill:#f76707;stroke:#fff}",
+        "@media (prefers-color-scheme:dark){.surface{fill:#0d1117}.panel{fill:#161b22;stroke:#30363d}.divider,.grid{stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#8b949e}.faint{fill:#6e7681}.signal{stroke:#ff8a24}.endpoint{fill:#ff8a24;stroke:#161b22}.milestone-line{stroke:#ff8a24}.milestone-dot{fill:#ff8a24;stroke:#161b22}}",
+        "</style>",
+        f'<rect class="surface" width="{width}" height="{height}" rx="20"/>',
+        f'<rect class="panel" x="16" y="16" width="{width - 32}" height="{height - 32}" rx="16"/>',
+        '<text class="mono muted" x="52" y="58" font-size="12" font-weight="700" letter-spacing="2.2">STARGAZER TRACE</text>',
+        f'<text class="sans ink" x="52" y="94" font-size="24" font-weight="650">{title}</text>',
+        '<circle cx="52" cy="119" r="3.5" fill="#f76707"/>',
+        '<text class="mono muted" x="64" y="123" font-size="12">EVENT STREAM / CUMULATIVE</text>',
+        f'<text class="mono faint" x="{width - 52}" y="58" text-anchor="end" font-size="11" letter-spacing="1.5">CURRENT</text>',
+        f'<text class="mono ink" x="{width - 52}" y="96" text-anchor="end" font-size="34" font-weight="700">{total:03d}</text>',
+        f'<line class="divider" x1="52" y1="132" x2="{width - 52}" y2="132"/>',
     ]
 
-    for value in sorted({round(max_count * tick / 4) for tick in range(5)}):
+    for value in range(0, max_count + 1, interval):
         tick_y = y(value)
-        lines.append(f'<line class="grid" x1="{left}" y1="{tick_y:.1f}" x2="{left + plot_width}" y2="{tick_y:.1f}"/>')
-        lines.append(f'<text class="tick" x="{left - 18}" y="{tick_y + 5:.1f}" text-anchor="end">{value}</text>')
+        lines.append(
+            f'<line class="grid" x1="{left}" y1="{tick_y:.1f}" x2="{left + plot_width}" y2="{tick_y:.1f}"/>'
+        )
+        lines.append(
+            f'<text class="mono faint" x="{left - 16}" y="{tick_y + 4:.1f}" text-anchor="end" font-size="11">{value:03d}</text>'
+        )
 
     lines.extend(
         [
-            f'<line class="axis" x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_height}"/>',
-            f'<line class="axis" x1="{left}" y1="{top + plot_height}" x2="{left + plot_width}" y2="{top + plot_height}"/>',
-            f'<polygon points="{area_points}" fill="#f97316" opacity="0.10"/>',
-            f'<polyline points="{points}" fill="none" stroke="#f97316" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>',
+            f'<path d="{area_path}" fill="url(#signal-fill)"/>',
+            f'<path class="signal" d="{trace_path}" fill="none" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter"/>',
         ]
     )
 
-    for index in _sample_indices(len(series), min(6, len(series))):
-        tick_x = x(index)
-        day = series[index][0]
-        label = f"{day.strftime('%b')} {day.day}"
-        lines.append(f'<line class="axis" x1="{tick_x:.1f}" y1="{top + plot_height}" x2="{tick_x:.1f}" y2="{top + plot_height + 8}"/>')
-        lines.append(f'<text class="tick" x="{tick_x:.1f}" y="{top + plot_height + 32}" text-anchor="middle">{label}</text>')
+    for milestone in (50, 100, 200):
+        if total < milestone:
+            continue
+        milestone_x = x(stars[milestone - 1])
+        milestone_y = y(milestone)
+        anchor = "end" if milestone_x > width - 190 else "start"
+        label_x = milestone_x - 10 if anchor == "end" else milestone_x + 10
+        lines.extend(
+            [
+                f'<line class="milestone-line" x1="{milestone_x:.1f}" y1="{milestone_y - 17:.1f}" x2="{milestone_x:.1f}" y2="{milestone_y + 17:.1f}" opacity=".45"/>',
+                f'<circle class="milestone-dot" cx="{milestone_x:.1f}" cy="{milestone_y:.1f}" r="4" stroke-width="2"/>',
+                f'<text class="mono muted" x="{label_x:.1f}" y="{milestone_y - 9:.1f}" text-anchor="{anchor}" font-size="10" letter-spacing="1">MILESTONE {milestone}</text>',
+            ]
+        )
 
-    end_x, end_y = x(len(series) - 1), y(total)
+    tick_count = 5
+    label_times = [
+        start_time + (end_time - start_time) * index / (tick_count - 1)
+        for index in range(tick_count)
+    ]
+    short_window = (end_time - start_time).days < 7
+    for index, timestamp in enumerate(label_times):
+        tick_x = x(timestamp)
+        label = timestamp.strftime("%b %d · %H:%M" if short_window else "%b %d").upper()
+        anchor = "start" if index == 0 else "end" if index == tick_count - 1 else "middle"
+        lines.append(
+            f'<text class="mono faint" x="{tick_x:.1f}" y="{top + plot_height + 27}" text-anchor="{anchor}" font-size="11">{label}</text>'
+        )
+
+    if stars:
+        end_y = y(total)
+        lines.append(
+            f'<circle class="endpoint" cx="{left + plot_width:.1f}" cy="{end_y:.1f}" r="5.5" stroke-width="3" filter="url(#signal-glow)"/>'
+        )
+    else:
+        lines.append(
+            f'<text class="mono muted" x="{left + plot_width / 2:.1f}" y="{top + plot_height / 2:.1f}" text-anchor="middle" font-size="13" letter-spacing="1.5">NO STARGAZER EVENTS YET</text>'
+        )
+
     lines.extend(
         [
-            f'<circle cx="{end_x:.1f}" cy="{end_y:.1f}" r="7" fill="#f97316" stroke="#ffffff" stroke-width="4"/>',
-            f'<text class="label" x="{width - 55}" y="{height - 28}" text-anchor="end">data: GitHub API · {generated_on.isoformat()}</text>',
+            f'<line class="divider" x1="52" y1="{height - 54}" x2="{width - 52}" y2="{height - 54}"/>',
+            f'<text class="mono faint" x="52" y="{height - 29}" font-size="10" letter-spacing="1.2">{source}</text>',
+            f'<text class="mono faint" x="{width - 52}" y="{height - 29}" text-anchor="end" font-size="10" letter-spacing="1.2">SNAPSHOT {generated_on.isoformat()} UTC</text>',
             "</svg>",
         ]
     )
@@ -176,14 +253,18 @@ def render_svg(repository: str, series: list[tuple[date, int]], generated_on: da
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY"))
-    parser.add_argument("--output", type=Path, default=Path("docs/assets/star-history.svg"))
-    parser.add_argument("--date", type=date.fromisoformat, default=datetime.now(timezone.utc).date())
+    parser.add_argument(
+        "--output", type=Path, default=Path("docs/assets/star-history.svg")
+    )
+    parser.add_argument(
+        "--date", type=date.fromisoformat, default=datetime.now(timezone.utc).date()
+    )
     args = parser.parse_args()
     if not args.repo:
         parser.error("--repo is required outside GitHub Actions")
 
     timestamps = fetch_stargazers(args.repo, os.environ.get("GITHUB_TOKEN"))
-    svg = render_svg(args.repo, daily_series(timestamps, args.date), args.date)
+    svg = render_svg(args.repo, timestamps, args.date)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(svg, encoding="utf-8")
     print(f"Wrote {args.output} with {len(timestamps)} stargazers")

@@ -31,13 +31,32 @@ class StarHistoryTests(unittest.TestCase):
 
     def test_empty_repository_renders_zero_state(self):
         generated_on = date(2026, 8, 23)
-        svg = MODULE.render_svg(
-            "owner/repo", MODULE.daily_series([], generated_on), generated_on
-        )
+        svg = MODULE.render_svg("owner/repo", [], generated_on)
 
-        self.assertIn("★ 0", svg)
+        self.assertIn(">000</text>", svg)
+        self.assertIn("NO STARGAZER EVENTS YET", svg)
         self.assertIn("2026-08-23", svg)
         self.assertIn("owner/repo", svg)
+
+    def test_render_uses_each_timestamp_as_a_step(self):
+        timestamps = [
+            datetime(2026, 8, 21, 1, tzinfo=timezone.utc),
+            datetime(2026, 8, 21, 2, tzinfo=timezone.utc),
+            datetime(2026, 8, 22, 3, tzinfo=timezone.utc),
+        ]
+        svg = MODULE.render_svg("owner/repo", timestamps, date(2026, 8, 23))
+
+        trace = next(line for line in svg.splitlines() if 'class="signal"' in line)
+        self.assertEqual(trace.count(" H "), 4)
+        self.assertEqual(trace.count(" V "), 3)
+        self.assertIn("each step represents one stargazer event", svg)
+        self.assertIn("AUG 21 ·", svg)
+        tick_lines = [line for line in svg.splitlines() if "·" in line]
+        self.assertIn('text-anchor="start"', tick_lines[0])
+        self.assertIn('text-anchor="end"', tick_lines[-1])
+
+    def test_axis_uses_a_250_ceiling_for_222_stars(self):
+        self.assertEqual(MODULE._nice_axis(222), (250, 50))
 
     def test_next_link_selects_next_relation(self):
         header = (
