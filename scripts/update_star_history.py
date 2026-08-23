@@ -117,13 +117,11 @@ def render_svg(
     repository: str,
     timestamps: Iterable[datetime],
     generated_on: date,
-    *,
-    source_label: str = "GITHUB STARGAZERS API",
 ) -> str:
-    """Render every stargazer event as a seekable step trace."""
+    """Render every stargazer event as a compact, README-friendly chart."""
     stars = sorted(_utc(timestamp) for timestamp in timestamps)
-    width, height = 1120, 560
-    left, right, top, bottom = 88, 42, 148, 74
+    width, height = 960, 480
+    left, right, top, bottom = 68, 40, 148, 66
     plot_width = width - left - right
     plot_height = height - top - bottom
     total = len(stars)
@@ -160,28 +158,24 @@ def render_svg(
     )
 
     title = escape(repository)
-    source = escape(source_label.upper())
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">',
         f'<title id="title">Stargazer trace for {title}</title>',
         f'<desc id="desc">{total} current GitHub stargazers as of {generated_on.isoformat()}; each step represents one stargazer event.</desc>',
         "<defs>",
-        '<linearGradient id="signal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7a18" stop-opacity=".22"/><stop offset="1" stop-color="#ff7a18" stop-opacity="0"/></linearGradient>',
-        '<filter id="signal-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
+        '<linearGradient id="signal-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f97316" stop-opacity=".18"/><stop offset="1" stop-color="#f97316" stop-opacity=".015"/></linearGradient>',
+        '<filter id="signal-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
         "</defs>",
         "<style>",
-        ".surface{fill:#f6f8fa}.panel{fill:#fff;stroke:#d8dee4}.divider,.grid{stroke:#d8dee4}.grid{stroke-dasharray:2 7}.ink{fill:#1f2328}.muted{fill:#656d76}.faint{fill:#8c959f}.sans{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.signal{stroke:#f76707}.endpoint{fill:#f76707;stroke:#fff}.milestone-line{stroke:#f76707}.milestone-dot{fill:#f76707;stroke:#fff}",
-        "@media (prefers-color-scheme:dark){.surface{fill:#0d1117}.panel{fill:#161b22;stroke:#30363d}.divider,.grid{stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#8b949e}.faint{fill:#6e7681}.signal{stroke:#ff8a24}.endpoint{fill:#ff8a24;stroke:#161b22}.milestone-line{stroke:#ff8a24}.milestone-dot{fill:#ff8a24;stroke:#161b22}}",
+        ".surface{fill:#fafaf9}.panel{fill:#fff;stroke:#e7e5e4}.grid{stroke:#e7e5e4}.ink{fill:#1c1917}.muted{fill:#78716c}.faint{fill:#a8a29e}.sans{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.accent{fill:#f97316}.signal{stroke:#f97316}.endpoint{fill:#f97316;stroke:#fff}",
+        "@media (prefers-color-scheme:dark){.surface{fill:#0c0a09}.panel{fill:#1c1917;stroke:#292524}.grid{stroke:#292524}.ink{fill:#fafaf9}.muted{fill:#a8a29e}.faint{fill:#78716c}.accent{fill:#fb923c}.signal{stroke:#fb923c}.endpoint{fill:#fb923c;stroke:#1c1917}}",
         "</style>",
-        f'<rect class="surface" width="{width}" height="{height}" rx="20"/>',
-        f'<rect class="panel" x="16" y="16" width="{width - 32}" height="{height - 32}" rx="16"/>',
-        '<text class="mono muted" x="52" y="58" font-size="12" font-weight="700" letter-spacing="2.2">STARGAZER TRACE</text>',
-        f'<text class="sans ink" x="52" y="94" font-size="24" font-weight="650">{title}</text>',
-        '<circle cx="52" cy="119" r="3.5" fill="#f76707"/>',
-        '<text class="mono muted" x="64" y="123" font-size="12">EVENT STREAM / CUMULATIVE</text>',
-        f'<text class="mono faint" x="{width - 52}" y="58" text-anchor="end" font-size="11" letter-spacing="1.5">CURRENT</text>',
-        f'<text class="mono ink" x="{width - 52}" y="96" text-anchor="end" font-size="34" font-weight="700">{total:03d}</text>',
-        f'<line class="divider" x1="52" y1="132" x2="{width - 52}" y2="132"/>',
+        f'<rect class="surface" width="{width}" height="{height}" rx="24"/>',
+        f'<rect class="panel" x="12" y="12" width="{width - 24}" height="{height - 24}" rx="20"/>',
+        '<rect class="accent" x="40" y="38" width="42" height="42" rx="12"/>',
+        '<path d="M61 47.5l3.2 6.5 7.2 1-5.2 5.1 1.2 7.2-6.4-3.4-6.4 3.4 1.2-7.2-5.2-5.1 7.2-1z" fill="#fff"/>',
+        f'<text class="sans ink" x="98" y="61" font-size="19" font-weight="650">{title}</text>',
+        f'<text class="sans ink" x="{width - 42}" y="66" text-anchor="end" font-size="34" font-weight="720">{total}</text>',
     ]
 
     for value in range(0, max_count + 1, interval):
@@ -190,30 +184,15 @@ def render_svg(
             f'<line class="grid" x1="{left}" y1="{tick_y:.1f}" x2="{left + plot_width}" y2="{tick_y:.1f}"/>'
         )
         lines.append(
-            f'<text class="mono faint" x="{left - 16}" y="{tick_y + 4:.1f}" text-anchor="end" font-size="11">{value:03d}</text>'
+            f'<text class="mono faint" x="{left - 12}" y="{tick_y + 4:.1f}" text-anchor="end" font-size="10">{value}</text>'
         )
 
     lines.extend(
         [
             f'<path d="{area_path}" fill="url(#signal-fill)"/>',
-            f'<path class="signal" d="{trace_path}" fill="none" stroke-width="2.25" stroke-linecap="square" stroke-linejoin="miter"/>',
+            f'<path class="signal" d="{trace_path}" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>',
         ]
     )
-
-    for milestone in (50, 100, 200):
-        if total < milestone:
-            continue
-        milestone_x = x(stars[milestone - 1])
-        milestone_y = y(milestone)
-        anchor = "end" if milestone_x > width - 190 else "start"
-        label_x = milestone_x - 10 if anchor == "end" else milestone_x + 10
-        lines.extend(
-            [
-                f'<line class="milestone-line" x1="{milestone_x:.1f}" y1="{milestone_y - 17:.1f}" x2="{milestone_x:.1f}" y2="{milestone_y + 17:.1f}" opacity=".45"/>',
-                f'<circle class="milestone-dot" cx="{milestone_x:.1f}" cy="{milestone_y:.1f}" r="4" stroke-width="2"/>',
-                f'<text class="mono muted" x="{label_x:.1f}" y="{milestone_y - 9:.1f}" text-anchor="{anchor}" font-size="10" letter-spacing="1">MILESTONE {milestone}</text>',
-            ]
-        )
 
     tick_count = 5
     label_times = [
@@ -223,7 +202,7 @@ def render_svg(
     short_window = (end_time - start_time).days < 7
     for index, timestamp in enumerate(label_times):
         tick_x = x(timestamp)
-        label = timestamp.strftime("%b %d · %H:%M" if short_window else "%b %d").upper()
+        label = timestamp.strftime("%m-%d %H:%M" if short_window else "%Y-%m-%d")
         anchor = "start" if index == 0 else "end" if index == tick_count - 1 else "middle"
         lines.append(
             f'<text class="mono faint" x="{tick_x:.1f}" y="{top + plot_height + 27}" text-anchor="{anchor}" font-size="11">{label}</text>'
@@ -232,21 +211,14 @@ def render_svg(
     if stars:
         end_y = y(total)
         lines.append(
-            f'<circle class="endpoint" cx="{left + plot_width:.1f}" cy="{end_y:.1f}" r="5.5" stroke-width="3" filter="url(#signal-glow)"/>'
+            f'<circle class="endpoint" cx="{left + plot_width:.1f}" cy="{end_y:.1f}" r="5" stroke-width="3" filter="url(#signal-glow)"/>'
         )
     else:
         lines.append(
-            f'<text class="mono muted" x="{left + plot_width / 2:.1f}" y="{top + plot_height / 2:.1f}" text-anchor="middle" font-size="13" letter-spacing="1.5">NO STARGAZER EVENTS YET</text>'
+            f'<text class="mono muted" x="{left + plot_width / 2:.1f}" y="{top + plot_height / 2:.1f}" text-anchor="middle" font-size="24">0</text>'
         )
 
-    lines.extend(
-        [
-            f'<line class="divider" x1="52" y1="{height - 54}" x2="{width - 52}" y2="{height - 54}"/>',
-            f'<text class="mono faint" x="52" y="{height - 29}" font-size="10" letter-spacing="1.2">{source}</text>',
-            f'<text class="mono faint" x="{width - 52}" y="{height - 29}" text-anchor="end" font-size="10" letter-spacing="1.2">SNAPSHOT {generated_on.isoformat()} UTC</text>',
-            "</svg>",
-        ]
-    )
+    lines.append("</svg>")
     return "\n".join(lines) + "\n"
 
 

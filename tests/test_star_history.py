@@ -33,8 +33,8 @@ class StarHistoryTests(unittest.TestCase):
         generated_on = date(2026, 8, 23)
         svg = MODULE.render_svg("owner/repo", [], generated_on)
 
-        self.assertIn(">000</text>", svg)
-        self.assertIn("NO STARGAZER EVENTS YET", svg)
+        self.assertIn(">0</text>", svg)
+        self.assertNotIn("NO STARGAZER EVENTS YET", svg)
         self.assertIn("2026-08-23", svg)
         self.assertIn("owner/repo", svg)
 
@@ -50,10 +50,24 @@ class StarHistoryTests(unittest.TestCase):
         self.assertEqual(trace.count(" H "), 4)
         self.assertEqual(trace.count(" V "), 3)
         self.assertIn("each step represents one stargazer event", svg)
-        self.assertIn("AUG 21 ·", svg)
-        tick_lines = [line for line in svg.splitlines() if "·" in line]
+        self.assertIn("08-21 ", svg)
+        tick_lines = [
+            line
+            for line in svg.splitlines()
+            if 'class="mono faint"' in line and "08-" in line
+        ]
         self.assertIn('text-anchor="start"', tick_lines[0])
         self.assertIn('text-anchor="end"', tick_lines[-1])
+
+    def test_render_stays_visually_minimal_and_language_neutral(self):
+        svg = MODULE.render_svg("owner/repo", [], date(2026, 8, 23))
+
+        self.assertNotIn("GitHub stars", svg)
+        self.assertNotIn(">STARS</text>", svg)
+        self.assertNotIn("STARGAZER TRACE", svg)
+        self.assertNotIn("EVENT STREAM", svg)
+        self.assertNotIn("MILESTONE", svg)
+        self.assertTrue(svg.isascii())
 
     def test_axis_uses_a_250_ceiling_for_222_stars(self):
         self.assertEqual(MODULE._nice_axis(222), (250, 50))
