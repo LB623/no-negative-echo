@@ -36,6 +36,10 @@ Agent 在迭代中修正了方案，却把被否内容带进最终标题、注�
 - 重写文章标题、开篇、UI 文案或交付说明
 - 长对话、多人协作或多轮修改后的最终收口
 
+## Star 趋势
+
+[![GitHub Star 趋势](docs/assets/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
+
 ## 安装
 
 让具备网络、终端和文件权限的 Agent 按安装合约执行：
@@ -52,8 +56,8 @@ https://raw.githubusercontent.com/LB623/no-negative-echo/main/INSTALL.md
 git clone https://github.com/LB623/no-negative-echo.git
 cd no-negative-echo
 python3 -I -m unittest discover -s tests -p 'test_*.py'
-python3 -I no-negative-echo/scripts/install_skill.py \
-  --expected-provenance-sha256 9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47 \
+python3 -I scripts/install_skill.py \
+  --expected-provenance-sha256 d42280b21f519ea00e417c68f31c68ca3d7faae607faf6dcb6e04beeff9c5ed6 \
   --discovery-root "$HOME/.agents/skills" \
   --agent codex
 ```
@@ -105,7 +109,7 @@ python3 -I no-negative-echo/scripts/install_skill.py \
 - 不要为通过检查而修改 API、迁移、测试、快照或现有用户改动。
 - 凭据、隐私与合规问题仍应交给专门工具处理。
 
-完整工作流、跨面 readback 与验证要求见 [SKILL.md](no-negative-echo/SKILL.md)。
+默认流程见 [SKILL.md](no-negative-echo/SKILL.md)；敏感信息、公开发布与严格验收才会按需读取 [high-assurance-finalization.md](no-negative-echo/references/high-assurance-finalization.md)。
 
 ## 开发与评测
 

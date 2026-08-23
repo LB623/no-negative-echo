@@ -149,7 +149,7 @@ second discoverable copy and violates this contract.
    Record the provenance marker's digest separately as
    `REVIEWED_PROVENANCE_SHA256`. For the current installation-contract
    revision, it must be
-   `9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47`.
+   `d42280b21f519ea00e417c68f31c68ca3d7faae607faf6dcb6e04beeff9c5ed6`.
    If it differs, the contract and checkout are from different revisions or
    the source changed; stop instead of guessing which one to trust.
 

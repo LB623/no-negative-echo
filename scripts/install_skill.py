@@ -24,10 +24,8 @@ PROVENANCE_FILE = Path(".no-negative-echo-provenance.json")
 PACKAGE_ID = "io.github.lb623.no-negative-echo"
 SOURCE_REPOSITORY = "https://github.com/LB623/no-negative-echo"
 CURRENT_PROVENANCE_SHA256 = (
-    "9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47"
+    "d42280b21f519ea00e417c68f31c68ca3d7faae607faf6dcb6e04beeff9c5ed6"
 )
-# Preserve prior published marker digests here when the runtime changes.
-KNOWN_OFFICIAL_PROVENANCE_SHA256 = frozenset({CURRENT_PROVENANCE_SHA256})
 RUNTIME_FILES = frozenset(
     {
         PROVENANCE_FILE,
@@ -36,10 +34,27 @@ RUNTIME_FILES = frozenset(
         Path("assets/decision-boundary.png"),
         Path("assets/icon-400.png"),
         Path("assets/icon.png"),
+        Path("references/high-assurance-finalization.md"),
         Path("scripts/check_surface.py"),
     }
 )
-RUNTIME_DIRECTORIES = frozenset({Path("agents"), Path("assets"), Path("scripts")})
+PREVIOUS_PROVENANCE_RUNTIME_FILES: dict[str, frozenset[Path]] = {
+    "9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47": frozenset(
+        {
+            PROVENANCE_FILE,
+            Path("SKILL.md"),
+            Path("agents/openai.yaml"),
+            Path("assets/decision-boundary.png"),
+            Path("assets/icon-400.png"),
+            Path("assets/icon.png"),
+            Path("scripts/check_surface.py"),
+        }
+    )
+}
+# Preserve each prior published marker digest with its exact runtime shape.
+KNOWN_OFFICIAL_PROVENANCE_SHA256 = frozenset(
+    {CURRENT_PROVENANCE_SHA256, *PREVIOUS_PROVENANCE_RUNTIME_FILES}
+)
 AGENT_SKILLS_DIRS = {
     "codex": Path(".agents/skills"),
     "claude": Path(".claude/skills"),
@@ -572,7 +587,9 @@ def _normalized_sha256(value: str, label: str) -> str:
     return normalized
 
 
-def _load_provenance(root: Path) -> dict[str, object]:
+def _load_provenance(
+    root: Path, *, runtime_files: frozenset[Path] = RUNTIME_FILES
+) -> dict[str, object]:
     marker = root / PROVENANCE_FILE
     before = _lstat(marker)
     if before is None or not stat.S_ISREG(before.st_mode):
@@ -637,7 +654,7 @@ def _load_provenance(root: Path) -> dict[str, object]:
     files = unique_object(payload["files"], "runtime provenance files")
     # Provenance is a serialized package format, so its path keys must not vary
     # with the host operating system's path separator.
-    expected_files = {path.as_posix() for path in RUNTIME_FILES - {PROVENANCE_FILE}}
+    expected_files = {path.as_posix() for path in runtime_files - {PROVENANCE_FILE}}
     if set(files) != expected_files:
         raise InstallValidationError("runtime provenance file manifest is invalid")
     for relative, expected_digest in files.items():
@@ -731,22 +748,28 @@ def _require_complete_runtime_structure(
         )
 
 
-def _validate_runtime_tree(root: Path, *, allow_ignored: bool) -> None:
+def _validate_runtime_tree(
+    root: Path,
+    *,
+    allow_ignored: bool,
+    runtime_files: frozenset[Path] = RUNTIME_FILES,
+) -> None:
+    runtime_directories = _manifest_directories(set(runtime_files))
     found_files, found_directories = _scan_runtime_tree(
         root,
         allow_ignored=allow_ignored,
-        allowed_files=RUNTIME_FILES,
-        allowed_directories=RUNTIME_DIRECTORIES,
+        allowed_files=runtime_files,
+        allowed_directories=runtime_directories,
     )
     _require_complete_runtime_structure(
         found_files,
         found_directories,
-        RUNTIME_FILES,
-        RUNTIME_DIRECTORIES,
+        runtime_files,
+        runtime_directories,
     )
     if _read_skill_name(root / "SKILL.md") != SKILL_NAME:
         raise InstallValidationError(f"SKILL.md name must be exactly {SKILL_NAME!r}")
-    _load_provenance(root)
+    _load_provenance(root, runtime_files=runtime_files)
 
 
 def _manifest_directories(files: set[Path]) -> set[Path]:
@@ -805,7 +828,14 @@ def _validate_existing_runtime_tree(root: Path, *, allow_ignored: bool) -> str |
             raise InstallValidationError(
                 "existing runtime provenance is not a recognized official release"
             )
-        _validate_runtime_tree(root, allow_ignored=allow_ignored)
+        runtime_files = PREVIOUS_PROVENANCE_RUNTIME_FILES.get(
+            marker_digest, RUNTIME_FILES
+        )
+        _validate_runtime_tree(
+            root,
+            allow_ignored=allow_ignored,
+            runtime_files=runtime_files,
+        )
         if _sha256_regular_file(root / PROVENANCE_FILE) != marker_digest:
             raise InstallValidationError(
                 "existing runtime provenance changed during validation"

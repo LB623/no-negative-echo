@@ -28,6 +28,12 @@ from install_skill import (  # noqa: E402
 )
 
 
+PREVIOUS_PROVENANCE_COMMIT = "9374edda950563a2756f26670e550b71391a504d"
+PREVIOUS_PROVENANCE_SHA256 = (
+    "9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47"
+)
+
+
 def refresh_provenance(root: Path) -> None:
     files = {
         relative.as_posix(): hashlib.sha256((root / relative).read_bytes()).hexdigest()
@@ -67,7 +73,7 @@ def paths_refer_to_same_file(expected: Path, reported: str) -> bool:
 
 def make_source(root: Path) -> Path:
     source = root / "source"
-    for directory in ("agents", "assets", "scripts"):
+    for directory in ("agents", "assets", "references", "scripts"):
         (source / directory).mkdir(parents=True, exist_ok=True)
     (source / "SKILL.md").write_text(
         "---\nname: no-negative-echo\n---\n", encoding="utf-8"
@@ -75,6 +81,9 @@ def make_source(root: Path) -> Path:
     (source / "agents" / "openai.yaml").write_text("name: test\n", encoding="utf-8")
     for filename in ("decision-boundary.png", "icon-400.png", "icon.png"):
         (source / "assets" / filename).write_bytes(b"PNG")
+    (source / "references" / "high-assurance-finalization.md").write_text(
+        "# High assurance\n", encoding="utf-8"
+    )
     (source / "scripts" / "check_surface.py").write_text(
         "#!/usr/bin/env python3\n", encoding="utf-8"
     )
@@ -106,6 +115,31 @@ def make_official_legacy_runtime(
         if crlf_checkout and relative.suffix in installer_module.LEGACY_TEXT_SUFFIXES:
             contents = contents.replace(b"\n", b"\r\n")
         destination.write_bytes(contents)
+    return target
+
+
+def make_previous_provenance_runtime(root: Path) -> Path:
+    target = root / "skills" / "no-negative-echo"
+    runtime_files = installer_module.PREVIOUS_PROVENANCE_RUNTIME_FILES[
+        PREVIOUS_PROVENANCE_SHA256
+    ]
+    for relative in runtime_files:
+        destination = target / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        contents = subprocess.check_output(
+            [
+                "git",
+                "show",
+                f"{PREVIOUS_PROVENANCE_COMMIT}:no-negative-echo/{relative.as_posix()}",
+            ],
+            cwd=REPOSITORY_ROOT,
+        )
+        destination.write_bytes(contents)
+    marker_digest = hashlib.sha256(
+        (target / installer_module.PROVENANCE_FILE).read_bytes()
+    ).hexdigest()
+    if marker_digest != PREVIOUS_PROVENANCE_SHA256:
+        raise AssertionError("previous provenance fixture digest changed")
     return target
 
 
@@ -1445,6 +1479,35 @@ class HardenedInstallerTests(unittest.TestCase):
             self.assertTrue(notices[0].startswith(prefix))
             reported = notices[0][len(prefix) :].split(";", 1)[0]
             self.assertTrue(paths_refer_to_same_file(backups[0], reported))
+
+    def test_previous_provenance_release_upgrades_to_current_runtime(self) -> None:
+        if not git_history_available(PREVIOUS_PROVENANCE_COMMIT):
+            self.skipTest("previous provenance release is unavailable")
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = make_source(root)
+            target = make_previous_provenance_runtime(root)
+
+            installed = install_skill(source, root / "skills")
+
+            self.assertTrue(os.path.samefile(installed, target))
+            self.assertTrue(
+                (
+                    target
+                    / "references"
+                    / "high-assurance-finalization.md"
+                ).is_file()
+            )
+            backups = list(root.glob(".*-backup-*"))
+            self.assertEqual(len(backups), 1)
+            self.assertFalse((backups[0] / "references").exists())
+            self.assertEqual(
+                hashlib.sha256(
+                    (backups[0] / installer_module.PROVENANCE_FILE).read_bytes()
+                ).hexdigest(),
+                PREVIOUS_PROVENANCE_SHA256,
+            )
 
     def test_backup_path_swap_after_activation_deletes_nothing(self) -> None:
         with TemporaryDirectory() as temp:

@@ -36,6 +36,10 @@ Use it to:
 - Rewrite article titles, openings, UI copy, or handoffs
 - Finalize work after long conversations, collaboration, or multiple revisions
 
+## Star history
+
+[![GitHub star history](docs/assets/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
+
 ## Install
 
 Ask an agent with network, terminal, and file permissions to follow the installation contract:
@@ -53,8 +57,8 @@ Local Codex example:
 git clone https://github.com/LB623/no-negative-echo.git
 cd no-negative-echo
 python3 -I -m unittest discover -s tests -p 'test_*.py'
-python3 -I no-negative-echo/scripts/install_skill.py \
-  --expected-provenance-sha256 9cc10a0f1d2d87f0de8517bf40c59e364783e2410308a0c8f815288f53a7cc47 \
+python3 -I scripts/install_skill.py \
+  --expected-provenance-sha256 d42280b21f519ea00e417c68f31c68ca3d7faae607faf6dcb6e04beeff9c5ed6 \
   --discovery-root "$HOME/.agents/skills" \
   --agent codex
 ```
@@ -106,7 +110,7 @@ This is a prompt-level mitigation, not a deterministic filter:
 - Do not change APIs, migrations, tests, snapshots, or pre-existing user work merely to satisfy this skill.
 - Use dedicated tools for credentials, privacy, and compliance checks.
 
-See [SKILL.md](no-negative-echo/SKILL.md) for the full workflow, cross-surface readback, and validation requirements.
+See [SKILL.md](no-negative-echo/SKILL.md) for the default workflow. Sensitive data, public release, and strict validation load [high-assurance-finalization.md](no-negative-echo/references/high-assurance-finalization.md) only when needed.
 
 ## Development and evaluation
 

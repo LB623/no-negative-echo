@@ -312,6 +312,13 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue((old_target / "agents" / "openai.yaml").is_file())
             self.assertTrue((old_target / "assets" / "icon.png").is_file())
             self.assertTrue((old_target / "assets" / "icon-400.png").is_file())
+            self.assertTrue(
+                (
+                    old_target
+                    / "references"
+                    / "high-assurance-finalization.md"
+                ).is_file()
+            )
             self.assertTrue((old_target / "scripts" / "check_surface.py").is_file())
             self.assertFalse(any(old_target.rglob("__pycache__")))
             self.assertFalse(any(old_target.rglob("*.pyc")))
@@ -323,6 +330,7 @@ class FixtureContractTests(unittest.TestCase):
             "no-negative-echo/.no-negative-echo-provenance.json",
             "no-negative-echo/SKILL.md",
             "no-negative-echo/agents/openai.yaml",
+            "no-negative-echo/references/high-assurance-finalization.md",
             "no-negative-echo/scripts/check_surface.py",
             "scripts/install_skill.py",
             "INSTALL.md",
