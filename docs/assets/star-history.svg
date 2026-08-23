@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600" role="img" aria-labelledby="title desc">
+  <title id="title">Star history for LB623/no-negative-echo</title>
+  <desc id="desc">The chart will be populated by the update star history workflow.</desc>
+  <rect width="1100" height="600" rx="14" fill="#ffffff"/>
+  <circle cx="67" cy="55" r="7" fill="#f97316"/>
+  <text x="86" y="63" fill="#0f172a" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="25" font-weight="650">LB623/no-negative-echo</text>
+  <line x1="105" y1="115" x2="105" y2="515" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="105" y1="515" x2="1045" y2="515" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="575" y="285" text-anchor="middle" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="28" font-weight="650">Star history is ready to generate</text>
+  <text x="575" y="330" text-anchor="middle" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="19">Run the “update star history” workflow once after merging.</text>
+  <text x="1045" y="572" text-anchor="end" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="18">data: GitHub API</text>
+</svg>

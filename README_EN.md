@@ -27,6 +27,7 @@
   <a href="#usage">Usage</a> ·
   <a href="#boundary">Decision boundary</a> ·
   <a href="#evaluation">Evaluation</a> ·
+  <a href="#star-history">Star History</a> ·
   <a href="#license">License</a> ·
   <a href="#feedback">Feedback</a>
 </p>
@@ -225,12 +226,15 @@ The public cases are a development set. Passing them does not mean the problem i
 ```text
 .
 ├── .gitattributes
-├── .github/workflows/test.yml
+├── .github/workflows/
+│   ├── star-history.yml
+│   └── test.yml
 ├── BACKGROUND.md
 ├── INSTALL.md
 ├── LICENSE
 ├── README.md
 ├── README_EN.md
+├── docs/assets/star-history.svg
 ├── evals/
 │   ├── comparator.txt
 │   ├── evaluation-oracle.jsonl
@@ -246,15 +250,32 @@ The public cases are a development set. Passing them does not mean the problem i
 │   │   ├── icon-400.png
 │   │   └── icon.png
 │   └── scripts/check_surface.py
-├── scripts/install_skill.py
+├── scripts/
+│   ├── install_skill.py
+│   └── update_star_history.py
 └── tests/
     ├── evaluation-cases.md
     ├── test_eval_integrity.py
     ├── test_installer_scanner.py
-    └── test_scripts.py
+    ├── test_scripts.py
+    └── test_star_history.py
 ```
 
 </details>
+
+<a id="star-history"></a>
+
+## ⭐ Star History
+
+<p align="center">
+  <a href="https://github.com/LB623/no-negative-echo/stargazers">
+    <img src="./docs/assets/star-history.svg" width="920" alt="no-negative-echo GitHub Star history">
+  </a>
+</p>
+
+<p align="center">
+  This repository's GitHub Action updates the chart daily from the GitHub Stargazers API. The badge at the top of the page shows the live Star count.
+</p>
 
 <a id="license"></a>
 

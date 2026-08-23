@@ -27,6 +27,7 @@
   <a href="#usage">使用</a> ·
   <a href="#boundary">判断边界</a> ·
   <a href="#evaluation">评测</a> ·
+  <a href="#star-history">Star History</a> ·
   <a href="#license">许可证</a> ·
   <a href="#feedback">反馈</a>
 </p>
@@ -225,12 +226,15 @@ python3 -I -m unittest discover -s tests -p 'test_*.py'
 ```text
 .
 ├── .gitattributes
-├── .github/workflows/test.yml
+├── .github/workflows/
+│   ├── star-history.yml
+│   └── test.yml
 ├── BACKGROUND.md
 ├── INSTALL.md
 ├── LICENSE
 ├── README.md
 ├── README_EN.md
+├── docs/assets/star-history.svg
 ├── evals/
 │   ├── comparator.txt
 │   ├── evaluation-oracle.jsonl
@@ -246,15 +250,32 @@ python3 -I -m unittest discover -s tests -p 'test_*.py'
 │   │   ├── icon-400.png
 │   │   └── icon.png
 │   └── scripts/check_surface.py
-├── scripts/install_skill.py
+├── scripts/
+│   ├── install_skill.py
+│   └── update_star_history.py
 └── tests/
     ├── evaluation-cases.md
     ├── test_eval_integrity.py
     ├── test_installer_scanner.py
-    └── test_scripts.py
+    ├── test_scripts.py
+    └── test_star_history.py
 ```
 
 </details>
+
+<a id="star-history"></a>
+
+## ⭐ Star History
+
+<p align="center">
+  <a href="https://github.com/LB623/no-negative-echo/stargazers">
+    <img src="./docs/assets/star-history.svg" width="920" alt="no-negative-echo GitHub Star 历史趋势">
+  </a>
+</p>
+
+<p align="center">
+  趋势图由本仓库的 GitHub Action 每日基于 GitHub Stargazers API 自动更新；页面顶部的徽章显示实时 Star 数。
+</p>
 
 <a id="license"></a>
 
