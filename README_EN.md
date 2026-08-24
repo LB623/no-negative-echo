@@ -36,7 +36,11 @@ Use it to:
 - Rewrite article titles, openings, UI copy, or handoffs
 - Finalize work after long conversations, collaboration, or multiple revisions
 
-## Install
+## Ways to use it
+
+Install the Skill when you need its decision workflow, scanner, and high-assurance mode. Add the compact instructions to `AGENTS.md` when you only want the current project to follow the core rule continuously. You can use both approaches together.
+
+### Option 1: Install the Skill
 
 Ask an agent with network, terminal, and file permissions to follow the installation contract:
 
@@ -61,9 +65,7 @@ python3 -I scripts/install_skill.py \
 
 See [INSTALL.md](INSTALL.md) for other hosts, project-level installation, upgrades, and the complete safety contract.
 
-## Use
-
-Explicitly invoke the skill before creating a commit, PR, release note, or handoff:
+Explicitly invoke the Skill before an important delivery:
 
 ```text
 Use the no-negative-echo Skill.
@@ -76,6 +78,29 @@ For editorial work:
 Use the no-negative-echo Skill.
 Rewrite the title and opening from the final retained body.
 ```
+
+### Option 2: Add it to the project's AGENTS.md
+
+If you only need the core behavior, append the following instructions to `AGENTS.md` at the project root. Create the file if it does not exist, and do not overwrite existing project instructions.
+
+```markdown
+## No Negative Echo
+
+When producing final artifacts and their wrappers, including titles, filenames,
+body text, comments, labels, commits, PRs, and handoffs, describe only the
+accepted final state. Assume the reader did not see this session.
+
+- Treat session-only rejections, intermediate attempts, and wording corrections as control information. Do not make them the name or narrative center of the final artifact.
+- Judge each delivery surface separately: Would a reader who did not see this session need the information? Would omission make the result inaccurate, unsafe, misleading, or incomplete for compatibility? Is it a real change from the state committed or approved when the task began, and does this surface need to explain it?
+- “Do not mention X” does not mean “write X-free.” Regenerate titles, filenames, openings, and labels from the positive target instead of editing rejected wording token by token.
+- Preserve real baseline changes, executed external actions, and necessary technical names, diagnostics, tests, and snapshots. User changes that existed before the task are not rejected content.
+- Do not include unrelated changes in this task's commit, PR, or handoff. Keep comparisons, quotations, audits, and migration explanations only when the user requests them or the current surface requires them.
+- After writing, reread all user-visible content and wrappers, including filenames, metadata, and hook rewrites. Recheck after any change. Do not add “cleaned” or “no residue” claims.
+```
+
+This option depends on the agent supporting `AGENTS.md`. Codex reads project instructions at the start of each run; after changing the file, start a new run or session to load the latest version. See the [official OpenAI documentation](https://learn.chatgpt.com/docs/agent-configuration/agents-md) for discovery details.
+
+The `AGENTS.md` option does not install the Skill and cannot use `scripts/check_surface.py` or the high-assurance workflow. When both approaches are present, `AGENTS.md` supplies the persistent core rule and the Skill adds full validation for important deliveries.
 
 ## Decision rule
 
