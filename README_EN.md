@@ -36,10 +36,6 @@ Use it to:
 - Rewrite article titles, openings, UI copy, or handoffs
 - Finalize work after long conversations, collaboration, or multiple revisions
 
-## Star history
-
-[![GitHub star history](https://github.com/LB623/no-negative-echo/releases/download/star-history/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
-
 ## Install
 
 Ask an agent with network, terminal, and file permissions to follow the installation contract:

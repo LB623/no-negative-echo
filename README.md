@@ -36,10 +36,6 @@ Agent 在迭代中修正了方案，却把被否内容带进最终标题、注�
 - 重写文章标题、开篇、UI 文案或交付说明
 - 长对话、多人协作或多轮修改后的最终收口
 
-## 收藏趋势
-
-[![收藏趋势](https://github.com/LB623/no-negative-echo/releases/download/star-history/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
-
 ## 安装
 
 让具备网络、终端和文件权限的 Agent 按安装合约执行：
