@@ -38,7 +38,7 @@ Agent 在迭代中修正了方案，却把被否内容带进最终标题、注�
 
 ## 收藏趋势
 
-[![收藏趋势](docs/assets/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
+[![收藏趋势](https://github.com/LB623/no-negative-echo/releases/download/star-history/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
 
 ## 安装
 

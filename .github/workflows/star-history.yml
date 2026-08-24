@@ -30,15 +30,16 @@ jobs:
       - name: Render star history
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/update_star_history.py
-      - name: Commit updated chart
+        run: python scripts/update_star_history.py --output /tmp/star-history.svg
+      - name: Publish chart without repository commits
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git diff --quiet -- docs/assets/star-history.svg; then
-            echo "Star history is already current."
-            exit 0
+          if ! gh release view star-history >/dev/null 2>&1; then
+            gh release create star-history \
+              --target "$GITHUB_SHA" \
+              --title "Star history assets" \
+              --notes "Automatically updated README assets. This prerelease is not a project version." \
+              --prerelease
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/assets/star-history.svg
-          git commit -m "Update star history"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          gh release upload star-history /tmp/star-history.svg --clobber

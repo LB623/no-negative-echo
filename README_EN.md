@@ -38,7 +38,7 @@ Use it to:
 
 ## Star history
 
-[![GitHub star history](docs/assets/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
+[![GitHub star history](https://github.com/LB623/no-negative-echo/releases/download/star-history/star-history.svg)](https://github.com/LB623/no-negative-echo/stargazers)
 
 ## Install
 
