@@ -325,6 +325,23 @@ class InstallerTests(unittest.TestCase):
 
 
 class FixtureContractTests(unittest.TestCase):
+    def test_default_installation_does_not_expand_into_an_audit(self) -> None:
+        contents = (REPOSITORY_ROOT / "INSTALL.md").read_text(encoding="utf-8")
+        default_section, separator, _ = contents.partition(
+            "## Custom destinations and audits"
+        )
+        self.assertTrue(separator)
+        self.assertLess(len(contents.encode("utf-8")), 8_000)
+        self.assertEqual(default_section.count("scripts/install_skill.py"), 1)
+        for audit_step in (
+            "-m unittest",
+            "git ls-files",
+            "git status --porcelain",
+            "--discovery-root",
+        ):
+            with self.subTest(audit_step=audit_step):
+                self.assertNotIn(audit_step, default_section)
+
     def test_runtime_hash_inputs_are_forced_to_lf_by_git(self) -> None:
         paths = [
             "no-negative-echo/.no-negative-echo-provenance.json",

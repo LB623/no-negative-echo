@@ -55,14 +55,12 @@ https://raw.githubusercontent.com/LB623/no-negative-echo/main/INSTALL.md
 ```bash
 git clone https://github.com/LB623/no-negative-echo.git
 cd no-negative-echo
-python3 -I -m unittest discover -s tests -p 'test_*.py'
-python3 -I scripts/install_skill.py \
+python3 -I -B scripts/install_skill.py \
   --expected-provenance-sha256 d42280b21f519ea00e417c68f31c68ca3d7faae607faf6dcb6e04beeff9c5ed6 \
-  --discovery-root "$HOME/.agents/skills" \
   --agent codex
 ```
 
-其他宿主、项目级安装、升级与完整安全约束见 [INSTALL.md](INSTALL.md)。
+安装器会自行校验 provenance、运行文件清单、目标冲突和复制后字节。默认安装不需要先读取全部 Python 文件、执行完整测试或枚举无关 Skill。其他宿主、自定义目录和高保证审计见 [INSTALL.md](INSTALL.md)。
 
 重要交付前建议显式调用：
 

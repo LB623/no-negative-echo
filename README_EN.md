@@ -56,14 +56,12 @@ Local Codex example:
 ```bash
 git clone https://github.com/LB623/no-negative-echo.git
 cd no-negative-echo
-python3 -I -m unittest discover -s tests -p 'test_*.py'
-python3 -I scripts/install_skill.py \
+python3 -I -B scripts/install_skill.py \
   --expected-provenance-sha256 d42280b21f519ea00e417c68f31c68ca3d7faae607faf6dcb6e04beeff9c5ed6 \
-  --discovery-root "$HOME/.agents/skills" \
   --agent codex
 ```
 
-See [INSTALL.md](INSTALL.md) for other hosts, project-level installation, upgrades, and the complete safety contract.
+The installer validates provenance, the runtime manifest, destination conflicts, and post-copy bytes itself. A default installation does not require reading every Python file, running the full test suite, or enumerating unrelated Skills first. See [INSTALL.md](INSTALL.md) for other hosts, custom destinations, and high-assurance audits.
 
 Explicitly invoke the Skill before an important delivery:
 
